@@ -1,0 +1,22 @@
+{
+  "name": "bill-collection-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "api",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c cyan,green \"npm run start:dev --workspace=api\" \"npm run dev --workspace=web\"",
+    "build": "npm run build --workspace=api && npm run build --workspace=web",
+    "lint": "npm run lint --workspace=api && npm run lint --workspace=web",
+    "test": "npm test --workspace=api",
+    "format": "prettier --write \"api/src/**/*.ts\" \"web/src/**/*.{ts,tsx}\"",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "husky": "^9.1.7",
+    "prettier": "^3.6.2"
+  }
+}

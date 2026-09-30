@@ -1,0 +1,241 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BatchStatus {
+  IN_PROGRESS
+  READY_FOR_PAYMENT
+  COMPLETED
+  CANCELLED
+
+  @@map("batch_status")
+}
+
+enum BillStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  DISPUTED
+
+  @@map("bill_status")
+}
+
+enum StepStatus {
+  PENDING
+  ALERTED
+  COMPLETED
+  RETURNED
+  ESCALATED
+
+  @@map("step_status")
+}
+
+enum DeductionType {
+  TDS
+  RETENTION
+  PENALTY
+  OTHER
+
+  @@map("deduction_type")
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+
+  @@map("notification_status")
+}
+
+model Organization {
+  id               String             @id @default(cuid())
+  name             String
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  contacts         Contact[]
+  workflowTemplates WorkflowTemplate[]
+  batches          Batch[]
+
+  @@map("organizations")
+}
+
+model Contact {
+  id             String          @id @default(cuid())
+  organizationId String          @map("org_id")
+  name           String
+  email          String
+  role           String
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedStages WorkflowStage[] @relation("AssignedContact")
+  backupStages   WorkflowStage[] @relation("BackupContact")
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@map("contacts")
+}
+
+model WorkflowTemplate {
+  id             String          @id @default(cuid())
+  organizationId String          @map("org_id")
+  name           String
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stages         WorkflowStage[]
+  batches        Batch[]
+
+  @@index([organizationId])
+  @@map("workflow_templates")
+}
+
+model WorkflowStage {
+  id                     String           @id @default(cuid())
+  templateId             String           @map("template_id")
+  order                  Int              @map("stage_order")
+  contactId              String           @map("contact_id")
+  reminderIntervalHours  Int              @default(24) @map("reminder_interval_hours")
+  maxReminders           Int              @default(3) @map("max_reminders")
+  backupContactId        String?          @map("backup_contact_id")
+  createdAt              DateTime         @default(now()) @map("created_at")
+  updatedAt              DateTime         @updatedAt @map("updated_at")
+  template               WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  contact                Contact          @relation("AssignedContact", fields: [contactId], references: [id], onDelete: Restrict)
+  backupContact          Contact?         @relation("BackupContact", fields: [backupContactId], references: [id], onDelete: SetNull)
+  stepInstances          StepInstance[]
+
+  @@unique([templateId, order])
+  @@index([contactId])
+  @@index([backupContactId])
+  @@map("workflow_stages")
+}
+
+model Batch {
+  id             String          @id @default(cuid())
+  organizationId String          @map("org_id")
+  templateId     String          @map("template_id")
+  status         BatchStatus     @default(IN_PROGRESS)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  template       WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  bills          Bill[]
+  stepInstances  StepInstance[]
+  payments       Payment[]
+  notifications  Notification[]
+
+  @@index([organizationId])
+  @@index([templateId])
+  @@index([status])
+  @@map("batches")
+}
+
+model Bill {
+  id          String               @id @default(cuid())
+  batchId     String               @map("batch_id")
+  billNumber  String               @map("bill_number")
+  amount      Decimal              @db.Decimal(14, 2)
+  balanceDue  Decimal              @db.Decimal(14, 2) @map("balance_due")
+  status      BillStatus           @default(PENDING)
+  dueDate     DateTime?            @map("due_date") @db.Date
+  fileKey     String?              @map("file_key")
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+  batch       Batch                @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  allocations PaymentAllocation[]
+
+  @@unique([batchId, billNumber])
+  @@index([batchId])
+  @@index([status])
+  @@map("bills")
+}
+
+model StepInstance {
+  id              String         @id @default(cuid())
+  batchId         String         @map("batch_id")
+  stageId         String         @map("stage_id")
+  status          StepStatus     @default(PENDING)
+  alertedAt       DateTime?      @map("alerted_at")
+  nextReminderAt  DateTime?      @map("next_reminder_at")
+  reminderCount   Int            @default(0) @map("reminder_count")
+  completedAt     DateTime?      @map("completed_at")
+  lastComment     String?        @map("last_comment")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  batch           Batch          @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  stage           WorkflowStage  @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  notifications   Notification[]
+
+  @@unique([batchId, stageId])
+  @@index([batchId])
+  @@index([status, nextReminderAt])
+  @@map("step_instances")
+}
+
+model Payment {
+  id          String               @id @default(cuid())
+  batchId     String               @map("batch_id")
+  amount      Decimal              @db.Decimal(14, 2)
+  paidAt      DateTime             @default(now()) @map("paid_at")
+  reference   String?
+  proofKey    String?              @map("proof_key")
+  createdAt   DateTime             @default(now()) @map("created_at")
+  batch       Batch                @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  allocations PaymentAllocation[]
+
+  @@index([batchId])
+  @@index([paidAt])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id              String        @id @default(cuid())
+  paymentId       String        @map("payment_id")
+  billId          String        @map("bill_id")
+  amount          Decimal       @db.Decimal(14, 2)
+  deductionType   DeductionType? @map("deduction_type")
+  deductionAmount Decimal       @default(0) @db.Decimal(14, 2) @map("deduction_amount")
+  payment         Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  bill            Bill          @relation(fields: [billId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentId, billId])
+  @@index([billId])
+  @@map("payment_allocations")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  action     String
+  actor      String
+  detail     Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId, createdAt])
+  @@map("audit_log")
+}
+
+model Notification {
+  id             String             @id @default(cuid())
+  batchId        String             @map("batch_id")
+  stepInstanceId String?            @map("step_instance_id")
+  recipient      String
+  status         NotificationStatus @default(PENDING)
+  sentAt         DateTime?          @map("sent_at")
+  error          String?
+  createdAt      DateTime           @default(now()) @map("created_at")
+  batch          Batch              @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  stepInstance   StepInstance?      @relation(fields: [stepInstanceId], references: [id], onDelete: SetNull)
+
+  @@index([batchId, createdAt])
+  @@index([stepInstanceId])
+  @@map("notifications")
+}
