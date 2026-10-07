@@ -11,9 +11,10 @@ import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { S3Module } from './s3/s3.module.js';
+import { ContactsModule } from './contacts/contacts.module.js';
 
 @Module({
-  imports: [PrismaModule, S3Module, WorkflowsModule, BatchesModule, BillsModule, PaymentsModule, NotificationsModule, RemindersModule, AuditModule, AuthModule],
+  imports: [PrismaModule, S3Module, WorkflowsModule, BatchesModule, BillsModule, PaymentsModule, NotificationsModule, RemindersModule, AuditModule, AuthModule, ContactsModule],
   controllers: [AppController],
   providers: [AppService],
 })

@@ -30,7 +30,7 @@ See `.env.example` for all app and local database variables. For deployed enviro
 
 ## AWS storage and email configuration
 
-The project uses AWS S3 for bill/payment document storage and AWS SES for reminder emails. The API uses the AWS SDK default credential chain and never accepts access keys from application code. For local container testing on Windows, set `S3_BUCKET` and `AWS_SES_FROM` in `.env` and run the stack with your AWS CLI profile available to the Docker session:
+The project can use AWS S3 for bill/payment document storage and AWS SES for reminder emails. The API uses the AWS SDK default credential chain and never accepts access keys from application code. For optional local container testing against AWS on Windows, set `S3_BUCKET` and `AWS_SES_FROM` in `.env` and run the stack with your AWS CLI profile available to the Docker session:
 
 ```powershell
 $env:AWS_PROFILE = "default"
@@ -45,9 +45,15 @@ In AWS, attach least-privilege permissions to the EC2 instance or container role
 
 Workflow template routes are available at `GET /workflows?organizationId=demo-org`, `GET /workflows/:id`, `POST /workflows`, `PUT /workflows/:id`, and `DELETE /workflows/:id`. The local seed provides `demo-org`, `demo-approver`, and `demo-backup-approver`. Create/replace requests require a name and at least one stage with an active contact from the same organization. Stage order is the array order; reminder defaults are 24 hours and 3 attempts. A template used by any batch cannot be replaced or deleted.
 
+Admin contact routes are `GET /contacts?organizationId=demo-org`, `POST /contacts`, and `PATCH /contacts/:id?organizationId=demo-org`. These require an authenticated Admin in the organization. The dashboard's Manage contacts dialog can update an approver email or add a contact; duplicate email addresses within an organization are rejected.
+
 Batch routes are `GET /batches?organizationId=demo-org`, `GET /batches/:id`, and `POST /batches`. Batch creation accepts `organizationId`, `templateId`, and one or more bills (`billNumber`, positive `amount`, optional ISO `dueDate`). It creates bills and ordered step instances transactionally, marks stage one alerted, schedules its first reminder, and writes an audit row. When SES is configured, the reminder pipeline also sends the actual approval notice to the stage contact and records the notification as sent.
 
 The internal workflow transition service supports complete and return-with-comment actions, advances or reactivates stages after a return, schedules the next reminder, and marks the final batch ready for payment. The authenticated guard and organization checks are in place for the workflow access paths that matter for real use.
+
+Payment routes support payment creation, batch payment history, on-account allocation, and payment-proof upload/download. Payment recording is limited to batches in `READY_FOR_PAYMENT`. The request includes a `batchId`, settlement `amount`, and one or more bill allocations. Cash allocations plus typed deductions must equal the settlement total. Bill balances and statuses, payment allocations, final batch completion, and audit history are updated transactionally. In local-only mode, proof files (PDF/JPG/PNG, up to 10 MB) are stored under the ignored `api/local-storage/payment-proofs/` directory; when `S3_BUCKET` is configured, the API stores them in S3.
+
+The API runs an in-process reminder sweep every minute. The manual `POST /reminders/run` route remains available for authenticated testing. Conditional database claims prevent the scheduler and manual trigger from processing the same due reminder concurrently; failed primary deliveries are retried after five minutes. Once a stage reaches its reminder limit, the system attempts escalation email to its backup approver and active organization contacts with an admin role. Quiet hours and production SES verification remain pending.
 
 The app is now in the working MVP state for local operations; production hardening remains limited to AWS role configuration, real user identity, and deployment environment settings.
 

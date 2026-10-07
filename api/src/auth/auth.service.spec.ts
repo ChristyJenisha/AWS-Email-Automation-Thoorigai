@@ -34,4 +34,12 @@ describe('AuthService', () => {
     expect(() => service.assertOrganizationAccess({ organizationId: 'demo-org' }, 'other-org')).toThrow(ForbiddenException);
     expect(() => service.assertOrganizationAccess(undefined, 'demo-org')).toThrow(UnauthorizedException);
   });
+
+  it('restricts contact administration to authenticated admin users', () => {
+    const service = new AuthService();
+
+    expect(() => service.assertAdminAccess({ role: 'Admin' })).not.toThrow();
+    expect(() => service.assertAdminAccess({ role: 'Approver' })).toThrow('Administrator access is required');
+    expect(() => service.assertAdminAccess(undefined)).toThrow(UnauthorizedException);
+  });
 });

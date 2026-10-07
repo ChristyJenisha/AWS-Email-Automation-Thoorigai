@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from '../auth/auth.service.js';
 import { WorkflowsController } from './workflows.controller.js';
 import { WorkflowsService } from './workflows.service.js';
+import { ApprovalsController } from './approvals.controller.js';
 import { WorkflowTransitionsService } from './workflow-transitions.service.js';
 
 describe('WorkflowsController', () => {
@@ -46,6 +47,47 @@ describe('WorkflowsController', () => {
       'step-1',
       'approver@example.test',
       'Please correct the invoice total',
+    );
+  });
+
+  it('inspects an approval token before allowing a public approval action', async () => {
+    workflowTransitionsService.inspectApprovalToken = vi.fn().mockResolvedValue({ batchId: 'batch-1' });
+    const approvalsController = new ApprovalsController(workflowTransitionsService as any);
+
+    await expect(approvalsController.inspect({ token: 'signed-token' })).resolves.toEqual({ batchId: 'batch-1' });
+    expect(workflowTransitionsService.inspectApprovalToken).toHaveBeenCalledWith('signed-token');
+  });
+
+  it('completes the step identified by a valid approval token', async () => {
+    workflowTransitionsService.verifyApprovalToken = vi.fn().mockReturnValue({
+      stepInstanceId: 'step-1',
+      actorId: 'approver-1',
+      organizationId: 'demo-org',
+    });
+    workflowTransitionsService.complete.mockResolvedValue({ status: 'COMPLETED' });
+    const approvalsController = new ApprovalsController(workflowTransitionsService as any);
+
+    await expect(approvalsController.complete({ token: 'signed-token' })).resolves.toEqual({ status: 'COMPLETED' });
+    expect(workflowTransitionsService.complete).toHaveBeenCalledWith('step-1', 'approver-1', 'demo-org');
+  });
+
+  it('returns the token-scoped step with the approver comment', async () => {
+    workflowTransitionsService.verifyApprovalToken = vi.fn().mockReturnValue({
+      stepInstanceId: 'step-1',
+      actorId: 'approver-1',
+      organizationId: 'demo-org',
+    });
+    workflowTransitionsService.returnToPrevious.mockResolvedValue({ status: 'RETURNED' });
+    const approvalsController = new ApprovalsController(workflowTransitionsService as any);
+
+    await expect(approvalsController.returnToPrevious({ token: 'signed-token', comment: 'Correct the total' })).resolves.toEqual({
+      status: 'RETURNED',
+    });
+    expect(workflowTransitionsService.returnToPrevious).toHaveBeenCalledWith(
+      'step-1',
+      'approver-1',
+      'Correct the total',
+      'demo-org',
     );
   });
 });

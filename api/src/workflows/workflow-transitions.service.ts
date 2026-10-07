@@ -4,15 +4,26 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { BatchStatus, Prisma, StepStatus } from '@prisma/client';
+import jwt from 'jsonwebtoken';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 const transitionContext = {
   id: true,
   batchId: true,
   status: true,
-  batch: { select: { id: true, status: true, organizationId: true } },
+  batch: {
+    select: {
+      id: true,
+      status: true,
+      organizationId: true,
+      organization: { select: { name: true } },
+      bills: { select: { billNumber: true, amount: true, balanceDue: true, dueDate: true } },
+    },
+  },
   stage: {
     select: {
       templateId: true,
@@ -183,8 +194,61 @@ export class WorkflowTransitionsService {
     }
   }
 
+  generateApprovalToken(stepInstanceId: string, actorId: string, organizationId?: string) {
+    const payload: Record<string, string> = {
+      stepInstanceId,
+      actorId,
+      organizationId: organizationId ?? '',
+    };
+    return jwt.sign(payload, this.getTokenSigningSecret(), { expiresIn: '7d' });
+  }
+
+  verifyApprovalToken(token: string): { stepInstanceId: string; actorId: string; organizationId?: string } {
+    try {
+      const payload = jwt.verify(token, this.getTokenSigningSecret()) as Record<string, string>;
+
+      if (!payload.stepInstanceId || !payload.actorId) {
+        throw new BadRequestException('Approval token is invalid');
+      }
+
+      return {
+        stepInstanceId: payload.stepInstanceId,
+        actorId: payload.actorId,
+        organizationId: payload.organizationId || undefined,
+      };
+    } catch {
+      throw new UnauthorizedException('Approval token is invalid or expired');
+    }
+  }
+
+  async inspectApprovalToken(token: string) {
+    const approval = this.verifyApprovalToken(token);
+    const step = await this.getActiveStep(approval.stepInstanceId);
+    this.validateOrganizationForStep(step, approval.organizationId);
+    this.validateActorForStep(step, approval.actorId);
+
+    return {
+      stepInstanceId: step.id,
+      batchId: step.batch.id,
+      organizationName: step.batch.organization.name,
+      stageOrder: step.stage.order,
+      bills: step.batch.bills.map((bill) => ({
+        billNumber: bill.billNumber,
+        amount: bill.amount,
+        balanceDue: bill.balanceDue,
+        dueDate: bill.dueDate,
+      })),
+    };
+  }
+
   private nextReminderAt(from: Date, intervalHours: number): Date {
     return new Date(from.getTime() + intervalHours * 60 * 60 * 1000);
+  }
+
+  private getTokenSigningSecret() {
+    const secret = process.env.TOKEN_SIGNING_SECRET;
+    if (!secret) throw new ServiceUnavailableException('Approval links are not configured');
+    return secret;
   }
 
   private validateActor(actor: string) {

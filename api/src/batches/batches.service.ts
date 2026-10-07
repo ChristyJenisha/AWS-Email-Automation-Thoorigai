@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, StepStatus } from '@prisma/client';
+import { BatchStatus, Prisma, StepStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { RemindersService } from '../reminders/reminders.service.js';
 import { CreateBatchDto } from './batch.dto.js';
 
 const batchDetails = {
@@ -22,7 +23,10 @@ const batchDetails = {
 
 @Injectable()
 export class BatchesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly remindersService: RemindersService,
+  ) {}
 
   async list(organizationId?: string) {
     if (!organizationId?.trim()) {
@@ -85,11 +89,12 @@ export class BatchesService {
       };
     });
 
-    return this.prisma.$transaction(async (transaction) => {
+    const batch = await this.prisma.$transaction(async (transaction) => {
       const batch = await transaction.batch.create({
         data: {
           organizationId: input.organizationId,
           templateId: input.templateId,
+          status: BatchStatus.IN_PROGRESS,
           bills: {
             create: input.bills.map((bill, index) => ({
               billNumber: billNumbers[index],
@@ -113,5 +118,8 @@ export class BatchesService {
       });
       return batch;
     });
+
+    await this.remindersService.sendInitialApproval(batch.id);
+    return batch;
   }
 }

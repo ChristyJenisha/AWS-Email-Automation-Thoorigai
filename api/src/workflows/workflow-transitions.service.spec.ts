@@ -36,7 +36,13 @@ describe('WorkflowTransitionsService', () => {
       id: 'step-current',
       batchId: 'batch-1',
       status: StepStatus.ALERTED,
-      batch: { id: 'batch-1', status: BatchStatus.IN_PROGRESS, organizationId: 'demo-org' },
+      batch: {
+        id: 'batch-1',
+        status: BatchStatus.IN_PROGRESS,
+        organizationId: 'demo-org',
+        organization: { name: 'Demo Organization' },
+        bills: [{ billNumber: 'INV-1001', amount: 1200, balanceDue: 1200, dueDate: null }],
+      },
       stage: {
         templateId: 'workflow-1',
         order,
@@ -170,5 +176,19 @@ describe('WorkflowTransitionsService', () => {
 
     await expect(service.complete('step-current', 'approver@example.test', 'other-org')).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('inspects a valid approval token and returns the authorized batch bill context', async () => {
+    vi.stubEnv('TOKEN_SIGNING_SECRET', 'test-token-signing-secret-with-sufficient-entropy');
+    const token = service.generateApprovalToken('step-current', 'approver-1', 'demo-org');
+    prisma.stepInstance.findUnique.mockResolvedValue(activeStep(1));
+
+    await expect(service.inspectApprovalToken(token)).resolves.toEqual({
+      stepInstanceId: 'step-current',
+      batchId: 'batch-1',
+      organizationName: 'Demo Organization',
+      stageOrder: 1,
+      bills: [{ billNumber: 'INV-1001', amount: 1200, balanceDue: 1200, dueDate: null }],
+    });
   });
 });

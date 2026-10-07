@@ -180,15 +180,16 @@ model StepInstance {
 }
 
 model Payment {
-  id          String               @id @default(cuid())
-  batchId     String               @map("batch_id")
-  amount      Decimal              @db.Decimal(14, 2)
-  paidAt      DateTime             @default(now()) @map("paid_at")
-  reference   String?
-  proofKey    String?              @map("proof_key")
-  createdAt   DateTime             @default(now()) @map("created_at")
-  batch       Batch                @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  allocations PaymentAllocation[]
+  id                String               @id @default(cuid())
+  batchId           String               @map("batch_id")
+  amount            Decimal              @db.Decimal(14, 2)
+  unallocatedAmount Decimal              @default(0) @db.Decimal(14, 2) @map("unallocated_amount")
+  paidAt            DateTime             @default(now()) @map("paid_at")
+  reference         String?
+  proofKey          String?              @map("proof_key")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  batch             Batch                @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  allocations       PaymentAllocation[]
 
   @@index([batchId])
   @@index([paidAt])

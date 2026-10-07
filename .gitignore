@@ -4,7 +4,11 @@ node_modules/
 **/.next/
 dist/
 coverage/
+api/local-storage/
+api/api/local-storage/
 .env
 .env.*
 !.env.example
 npm-debug.log*
+
+api/tsconfig.build.tsbuildinfo

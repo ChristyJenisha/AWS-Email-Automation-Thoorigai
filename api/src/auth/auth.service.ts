@@ -1,4 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 export type AppUser = {
@@ -23,7 +25,7 @@ export class AuthService {
       name: 'Demo Approver',
       role: 'Approver',
       organizationId: 'demo-org',
-      password: 'demo123',
+      password: bcrypt.hashSync('demo123', 10),
     },
     'backup@example.test': {
       id: 'demo-backup-approver',
@@ -31,7 +33,7 @@ export class AuthService {
       name: 'Demo Backup Approver',
       role: 'Backup Approver',
       organizationId: 'demo-org',
-      password: 'demo123',
+      password: bcrypt.hashSync('demo123', 10),
     },
     'admin@example.test': {
       id: 'demo-admin',
@@ -39,7 +41,7 @@ export class AuthService {
       name: 'Demo Admin',
       role: 'Admin',
       organizationId: 'demo-org',
-      password: 'demo123',
+      password: bcrypt.hashSync('demo123', 10),
     },
   };
 
@@ -50,7 +52,7 @@ export class AuthService {
     const password = input.password ?? '';
     const user = await this.findUserByEmail(email ?? '');
 
-    if (!user || password !== user.password) {
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -106,6 +108,13 @@ export class AuthService {
     }
   }
 
+  assertAdminAccess(user: Pick<AppUser, 'role'> | undefined): void {
+    if (!user) throw new UnauthorizedException('Authentication required');
+    if (user.role.toLowerCase() !== 'admin') {
+      throw new ForbiddenException('Administrator access is required');
+    }
+  }
+
   private async findUserByEmail(email: string): Promise<(AppUser & { password: string }) | undefined> {
     const demoUser = this.demoUsers[email];
     if (demoUser) return demoUser;
@@ -125,7 +134,7 @@ export class AuthService {
       name: contact.name,
       role: contact.role,
       organizationId: contact.organizationId,
-      password: 'demo123',
+      password: bcrypt.hashSync('demo123', 10),
     };
   }
 
@@ -148,18 +157,17 @@ export class AuthService {
       name: contact.name,
       role: contact.role,
       organizationId: contact.organizationId,
-      password: 'demo123',
+      password: bcrypt.hashSync('demo123', 10),
     };
   }
 
   private createToken(payload: Record<string, string>) {
-    return Buffer.from(JSON.stringify(payload)).toString('base64url');
+    return jwt.sign(payload, this.getJwtSecret(), { expiresIn: '8h' });
   }
 
   private decodeToken(token: string): Record<string, string> {
     try {
-      const decoded = Buffer.from(token, 'base64url').toString('utf8');
-      const parsed = JSON.parse(decoded) as Record<string, string>;
+      const parsed = jwt.verify(token, this.getJwtSecret()) as Record<string, string>;
 
       if (!parsed.sub || !parsed.email) {
         throw new UnauthorizedException('Invalid or expired session token');
@@ -169,5 +177,9 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException('Invalid or expired session token');
     }
+  }
+
+  private getJwtSecret() {
+    return process.env.JWT_SECRET ?? 'bill-collection-demo-secret-change-me';
   }
 }

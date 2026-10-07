@@ -11,7 +11,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tracker} -d ${POSTGRES_DB:-bill_tracker}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-tracker} -d ${POSTGRES_DB:-bill_tracker}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -25,11 +29,15 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-tracker}:${POSTGRES_PASSWORD:-local-dev-only}@db:5432/${POSTGRES_DB:-bill_tracker}?schema=public
       PORT: 3001
+      AWS_PROFILE: thoorigai
+      AWS_REGION: ap-south-1
+      AWS_SDK_LOAD_CONFIG: "1"
     ports:
       - "${API_PORT:-3001}:3001"
     volumes:
       - ./api:/workspace/api
       - /workspace/node_modules
+      - C:/Users/acer/.aws:/root/.aws:ro
     depends_on:
       db:
         condition: service_healthy

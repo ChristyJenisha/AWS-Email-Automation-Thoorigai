@@ -13,6 +13,7 @@ describe('BatchesService', () => {
     auditLog: { create: ReturnType<typeof vi.fn> };
     $transaction: ReturnType<typeof vi.fn>;
   };
+  const remindersService = { sendInitialApproval: vi.fn().mockResolvedValue({ status: 'sent' }) };
 
   beforeEach(() => {
     prisma = {
@@ -22,7 +23,8 @@ describe('BatchesService', () => {
       auditLog: { create: vi.fn() },
       $transaction: vi.fn((callback) => callback(prisma)),
     };
-    service = new BatchesService(prisma as unknown as PrismaService);
+    remindersService.sendInitialApproval.mockClear();
+    service = new BatchesService(prisma as unknown as PrismaService, remindersService as any);
   });
 
   it('creates bills and ordered approval steps atomically and audits the batch', async () => {
@@ -59,6 +61,7 @@ describe('BatchesService', () => {
     expect(prisma.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ entityType: 'batch', entityId: 'batch-1', action: 'created' }),
     });
+    expect(remindersService.sendInitialApproval).toHaveBeenCalledWith('batch-1');
     vi.useRealTimers();
   });
 

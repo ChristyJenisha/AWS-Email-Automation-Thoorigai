@@ -6,6 +6,30 @@ import { PrismaService } from '../prisma/prisma.service.js';
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getBatchOrganizationId(batchId: string): Promise<string> {
+    const batch = await this.prisma.batch.findUnique({
+      where: { id: batchId },
+      select: { organizationId: true },
+    });
+
+    if (!batch) {
+      throw new NotFoundException('Batch not found');
+    }
+
+    return batch.organizationId;
+  }
+
+  async assertNotificationBelongsToBatch(notificationId: string, batchId: string): Promise<void> {
+    const notification = await this.prisma.notification.findFirst({
+      where: { id: notificationId, batchId },
+      select: { id: true },
+    });
+
+    if (!notification) {
+      throw new NotFoundException('Notification not found for this batch');
+    }
+  }
+
   async listByBatch(batchId: string) {
     return this.prisma.notification.findMany({
       where: { batchId },
@@ -28,9 +52,9 @@ export class NotificationsService {
     });
   }
 
-  async markSent(notificationId: string) {
+  async markSent(notificationId: string, batchId: string) {
     const updated = await this.prisma.notification.updateMany({
-      where: { id: notificationId, status: NotificationStatus.PENDING },
+      where: { id: notificationId, batchId, status: NotificationStatus.PENDING },
       data: { status: NotificationStatus.SENT, sentAt: new Date() },
     });
 
