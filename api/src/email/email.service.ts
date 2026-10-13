@@ -5,6 +5,7 @@ export type SendReminderEmailInput = {
   to: string;
   subject: string;
   body: string;
+  sensitive?: boolean;
 };
 
 @Injectable()
@@ -24,7 +25,7 @@ export class EmailService {
     const body = input.body.trim() || 'This is a workflow reminder.';
 
     if (!this.client || !this.defaultFrom) {
-      console.log(`[EMAIL_SIMULATED] To: ${to}\nSubject: ${subject}\n${body}`);
+      console.log(`[EMAIL_SIMULATED] To: ${to}\nSubject: ${subject}${input.sensitive ? '\nBody: [hidden sensitive message]' : `\n${body}`}`);
       return { status: 'simulated', provider: 'local-dev', to, subject };
     }
 
@@ -42,8 +43,12 @@ export class EmailService {
 
       return { status: 'sent', provider: 'ses', messageId: result.MessageId, to, subject };
     } catch (error) {
-      console.error('SES email sending failed', error);
-      throw new ServiceUnavailableException('Email delivery is unavailable right now');
+      console.warn('SES email sending failed, falling back to local simulation:', (error as Error).message);
+      if (process.env.NODE_ENV === 'production') {
+        throw new ServiceUnavailableException('Email delivery is unavailable right now');
+      }
+      console.log(`[EMAIL_SIMULATED] To: ${to}\nSubject: ${subject}${input.sensitive ? '\nBody: [hidden sensitive message]' : `\n${body}`}`);
+      return { status: 'simulated', provider: 'local-dev', to, subject };
     }
   }
 }

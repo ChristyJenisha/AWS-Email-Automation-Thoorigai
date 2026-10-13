@@ -8,7 +8,8 @@ describe('WorkflowTransitionsService', () => {
   let service: WorkflowTransitionsService;
   let prisma: {
     stepInstance: { findUnique: ReturnType<typeof vi.fn>; updateMany: ReturnType<typeof vi.fn> };
-    workflowStage: { findFirst: ReturnType<typeof vi.fn> };
+    workflowStage: { findFirst: ReturnType<typeof vi.fn>; update?: ReturnType<typeof vi.fn> };
+    contact?: { findFirst: ReturnType<typeof vi.fn> };
     batch: { updateMany: ReturnType<typeof vi.fn> };
     auditLog: { create: ReturnType<typeof vi.fn> };
     $transaction: ReturnType<typeof vi.fn>;
@@ -17,7 +18,8 @@ describe('WorkflowTransitionsService', () => {
   beforeEach(() => {
     prisma = {
       stepInstance: { findUnique: vi.fn(), updateMany: vi.fn() },
-      workflowStage: { findFirst: vi.fn() },
+      workflowStage: { findFirst: vi.fn(), update: vi.fn() },
+      contact: { findFirst: vi.fn() },
       batch: { updateMany: vi.fn() },
       auditLog: { create: vi.fn() },
       $transaction: vi.fn((callback) => callback(prisma)),
@@ -75,6 +77,10 @@ describe('WorkflowTransitionsService', () => {
         reminderCount: 0,
         completedAt: null,
         lastComment: null,
+        approvalOtpHash: null,
+        approvalOtpExpiresAt: null,
+        approvalOtpAttempts: 0,
+        approvalOtpRequestedAt: null,
       },
     });
     expect(prisma.auditLog.create).toHaveBeenCalledWith({
@@ -190,5 +196,142 @@ describe('WorkflowTransitionsService', () => {
       stageOrder: 1,
       bills: [{ billNumber: 'INV-1001', amount: 1200, balanceDue: 1200, dueDate: null }],
     });
+  });
+  it('allows an administrator to confirm on behalf of an approver with manual audit attribution', async () => {
+    prisma.stepInstance.findUnique.mockResolvedValue(activeStep(1));
+    prisma.stepInstance.updateMany.mockResolvedValue({ count: 1 });
+    prisma.workflowStage.findFirst.mockResolvedValue({ id: 'stage-2', reminderIntervalHours: 12 });
+
+    const adminUser = {
+      id: 'admin-1',
+      email: 'admin@example.test',
+      role: 'Admin',
+      organizationId: 'demo-org',
+    };
+
+    const result = await service.confirmOnBehalf('step-current', adminUser, 'Approver approved via phone call');
+
+    expect(result).toEqual({
+      stepInstanceId: 'step-current',
+      status: StepStatus.COMPLETED,
+      nextStageId: 'stage-2',
+      source: 'manual',
+    });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        entityId: 'step-current',
+        action: 'completed',
+        actor: 'admin@example.test',
+        detail: expect.objectContaining({
+          source: 'manual',
+          offlineConfirmation: true,
+          note: 'Approver approved via phone call',
+        }),
+      }),
+    });
+  });
+
+  it('rejects confirmation on behalf when actor is not an admin', async () => {
+    const nonAdminUser = {
+      id: 'user-1',
+      email: 'user@example.test',
+      role: 'Approver',
+      organizationId: 'demo-org',
+    };
+
+    await expect(service.confirmOnBehalf('step-current', nonAdminUser)).rejects.toThrow('administrator');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('records an approver reassignment request with mandatory reason', async () => {
+    vi.stubEnv('TOKEN_SIGNING_SECRET', 'test-token-signing-secret-with-sufficient-entropy');
+    const token = service.generateApprovalToken('step-current', 'approver-1', 'demo-org');
+    prisma.stepInstance.findUnique.mockResolvedValue(activeStep(1));
+
+    const result = await service.requestReassignment(token, 'Approver on extended medical leave', 'backup@example.test');
+
+    expect(result).toEqual({
+      stepInstanceId: 'step-current',
+      status: 'reassignment_requested',
+      message: expect.stringContaining('administrator review'),
+    });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        entityId: 'step-current',
+        action: 'reassignment_requested',
+        actor: 'approver-1',
+        detail: expect.objectContaining({
+          reason: 'Approver on extended medical leave',
+          requestedContactEmail: 'backup@example.test',
+          clientApprovalRequired: true,
+        }),
+      }),
+    });
+  });
+
+  it('allows an administrator to reassign an active step to another active contact', async () => {
+    prisma.stepInstance.findUnique.mockResolvedValue(activeStep(1));
+    (prisma.contact as any).findFirst.mockResolvedValue({
+      id: 'contact-replacement',
+      name: 'Replacement Approver',
+      email: 'replacement@example.test',
+      isActive: true,
+      organizationId: 'demo-org',
+    });
+    prisma.stepInstance.updateMany.mockResolvedValue({ count: 1 });
+    (prisma.workflowStage as any).update = vi.fn().mockResolvedValue({ id: 'stage-1', contactId: 'contact-replacement' });
+
+    const adminUser = {
+      id: 'admin-1',
+      email: 'admin@example.test',
+      role: 'Admin',
+      organizationId: 'demo-org',
+    };
+
+    const result = await service.reassignStep(
+      'step-current',
+      'contact-replacement',
+      adminUser,
+      'Original approver unavailable',
+    );
+
+    expect(result).toEqual({
+      stepInstanceId: 'step-current',
+      status: StepStatus.ALERTED,
+      newContact: {
+        id: 'contact-replacement',
+        name: 'Replacement Approver',
+        email: 'replacement@example.test',
+      },
+      lastComment: expect.stringContaining('Replacement Approver'),
+      message: expect.stringContaining('successfully reassigned'),
+    });
+
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        entityId: 'step-current',
+        action: 'step_reassigned',
+        actor: 'admin@example.test',
+        detail: expect.objectContaining({
+          previousContactId: 'approver-1',
+          newContactId: 'contact-replacement',
+          reason: 'Original approver unavailable',
+          source: 'manual',
+        }),
+      }),
+    });
+  });
+
+  it('rejects step reassignment when actor is not an admin', async () => {
+    const approverUser = {
+      id: 'approver-1',
+      email: 'approver@example.test',
+      role: 'Approver',
+      organizationId: 'demo-org',
+    };
+
+    await expect(
+      service.reassignStep('step-current', 'contact-replacement', approverUser),
+    ).rejects.toThrow('administrator');
   });
 });

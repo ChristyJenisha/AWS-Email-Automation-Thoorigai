@@ -201,4 +201,12 @@ describe('RemindersService', () => {
       data: expect.objectContaining({ reminderCount: 3, status: 'ESCALATED', nextReminderAt: null }),
     }));
   });
+  it('skips reminder processing during quiet hours (e.g. 11:00 PM IST)', async () => {
+    // 11 PM IST is 17:30 UTC
+    const quietHourTime = new Date('2026-09-30T17:30:00.000Z');
+    const result = await service.processDueReminders(quietHourTime);
+
+    expect(result).toEqual([]);
+    expect(prisma.stepInstance.findMany).not.toHaveBeenCalled();
+  });
 });

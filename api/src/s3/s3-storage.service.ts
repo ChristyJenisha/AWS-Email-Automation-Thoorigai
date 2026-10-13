@@ -76,23 +76,31 @@ export class S3StorageService {
       throw new BadRequestException('Choose a valid PDF, JPG, or PNG file');
     }
 
-    const key = `${process.env.S3_BUCKET?.trim() ? 'payment-proofs' : 'local-payment-proofs'}/${paymentId}/${randomUUID()}.${extension}`;
     const bucket = process.env.S3_BUCKET?.trim();
     if (bucket) {
-      await this.client.send(new PutObjectCommand({
-        Bucket: bucket,
-        Key: key,
-        Body: content,
-        ContentLength: content.length,
-        ContentType: contentType,
-      }));
-      return { key, storage: 's3' };
+      const s3Key = `payment-proofs/${paymentId}/${randomUUID()}.${extension}`;
+      try {
+        await this.client.send(new PutObjectCommand({
+          Bucket: bucket,
+          Key: s3Key,
+          Body: content,
+          ContentLength: content.length,
+          ContentType: contentType,
+        }));
+        return { key: s3Key, storage: 's3' };
+      } catch (err) {
+        console.warn('S3 upload failed, falling back to local disk storage:', (err as Error).message);
+        if (process.env.NODE_ENV === 'production') {
+          throw err;
+        }
+      }
     }
 
+    const localKey = `local-payment-proofs/${paymentId}/${randomUUID()}.${extension}`;
     const directory = this.localPaymentProofDirectory(paymentId);
     await mkdir(directory, { recursive: true });
-    await writeFile(join(directory, key.split('/')[2]), content, { flag: 'wx' });
-    return { key, storage: 'local' };
+    await writeFile(join(directory, localKey.split('/')[2]), content, { flag: 'wx' });
+    return { key: localKey, storage: 'local' };
   }
 
   async createDownloadUrl(key: string): Promise<{ url: string; expiresIn: number }> {

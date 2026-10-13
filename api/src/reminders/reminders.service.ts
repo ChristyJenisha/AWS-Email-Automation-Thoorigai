@@ -29,7 +29,13 @@ export class RemindersService {
     });
 
     if (!step) return { status: 'skipped' as const, reason: 'no_active_step' };
-    const approver = step.stage.contact?.email ? step.stage.contact : step.stage.backupContact;
+    const contactActive = (step.stage.contact as any)?.isActive !== false;
+    const backupActive = (step.stage.backupContact as any)?.isActive !== false;
+    const approver = (contactActive && step.stage.contact?.email)
+      ? step.stage.contact
+      : (backupActive && step.stage.backupContact?.email)
+        ? step.stage.backupContact
+        : null;
     if (!approver?.email || !approver.id) return { status: 'skipped' as const, reason: 'no_approver_email' };
 
     const notification = await this.prisma.notification.create({
@@ -67,7 +73,32 @@ export class RemindersService {
     }
   }
 
+  isQuietHours(date: Date = new Date()): boolean {
+    if (process.env.QUIET_HOURS_ENABLED === 'false') return false;
+
+    const startHour = Number(process.env.QUIET_HOURS_START ?? 21); // 9 PM
+    const endHour = Number(process.env.QUIET_HOURS_END ?? 8);      // 8 AM
+    const timezone = process.env.QUIET_HOURS_TIMEZONE || 'Asia/Kolkata';
+
+    try {
+      const timeStr = date.toLocaleTimeString('en-US', { timeZone: timezone, hour12: false, hour: 'numeric' });
+      const currentHour = parseInt(timeStr, 10);
+
+      if (startHour > endHour) {
+        return currentHour >= startHour || currentHour < endHour;
+      }
+      return currentHour >= startHour && currentHour < endHour;
+    } catch {
+      const istHour = (date.getUTCHours() + 5 + Math.floor((date.getUTCMinutes() + 30) / 60)) % 24;
+      return istHour >= 21 || istHour < 8;
+    }
+  }
+
   async processDueReminders(now: Date = new Date()) {
+    if (this.isQuietHours(now)) {
+      console.log(`[REMINDERS_QUIET_HOURS] Skipping due reminder processing during quiet hours (${now.toISOString()})`);
+      return [];
+    }
     const dueSteps = await this.prisma.stepInstance.findMany({
       where: {
         status: StepStatus.ALERTED,
@@ -105,7 +136,13 @@ export class RemindersService {
     }> = [];
 
     for (const step of dueSteps) {
-      const approver = step.stage.contact?.email ? step.stage.contact : step.stage.backupContact;
+      const contactActive = (step.stage.contact as any)?.isActive !== false;
+      const backupActive = (step.stage.backupContact as any)?.isActive !== false;
+      const approver = (contactActive && step.stage.contact?.email)
+        ? step.stage.contact
+        : (backupActive && step.stage.backupContact?.email)
+          ? step.stage.backupContact
+          : null;
       if (!approver?.email || !approver.id) {
         continue;
       }

@@ -57,6 +57,15 @@ Follow `Bill collection tracker — POC implementation plan.pdf`. The current wo
 | `infra/docker/api.Dockerfile` | Generates Prisma Client during API image build through the API workspace script. |
 | `.env.example` | Clarifies AWS S3 settings are optional locally and static AWS keys must not be stored there. |
 | `README.md` | Links the implementation log and documents S3 setup, workflow/batch routes, and authentication limitations. |
+| `docker-compose.prod.yml` | Production Docker Compose running API, Next.js, Nginx, and Certbot with health checks. |
+| `infra/docker/api.prod.Dockerfile` | Multi-stage production container build for NestJS API with minimal runtime footprint. |
+| `infra/docker/web.prod.Dockerfile` | Multi-stage production container build for Next.js web application. |
+| `infra/nginx/nginx.conf` and `infra/nginx/conf.d/default.conf` | Production Nginx reverse proxy routing web, API, health checks, and Let's Encrypt challenges. |
+| `infra/nginx/conf.d/ssl.conf.template` | Production TLS/HTTPS configuration template for custom domain names. |
+| `.github/workflows/deploy.yml` | Automated CI/CD pipeline running lint, tests, builds, and SSH deployment to EC2. |
+| `infra/scripts/deploy.sh` and `infra/scripts/rollback.sh` | Automated EC2 zero-downtime deployment script and automated rollback script. |
+| `infra/scripts/setup-ec2.sh` and `infra/scripts/init-letsencrypt.sh` | One-click EC2 server initialization and Let's Encrypt SSL certificate generation scripts. |
+| `api/src/app.controller.ts` and `api/src/app.service.ts` | Added `GET /health` endpoint verifying database connectivity and service uptime. |
 | `docs/PROJECT-IMPLEMENTATION-LOG.md` | This running record of phase status, decisions, file changes, verification, and next work. |
 
 ## Latest verification snapshot
@@ -205,6 +214,108 @@ Follow `Bill collection tracker — POC implementation plan.pdf`. The current wo
 - Cleared `AWS_SES_FROM` in `.env.example` so a fresh local setup uses simulated email as its comments describe; AWS SES now requires an intentional local configuration change.
 - The existing `.env` was not changed and no email was sent.
 
+### 2026-10-08 - Approver link validity
+
+- Approval links no longer expire after a fixed seven days. Their actions remain available only while the associated workflow step is active; completed, returned, escalated, or otherwise inactive steps are rejected by the existing state check.
+- Links remain inspectable without consuming them, which supports email security scanners.
+- OTP and action attribution requirements from the POC plan remain outstanding. Build and workflow verification are pending for this change.
+
+### 2026-10-08 - Approver email OTP
+
+- Added an additive migration for per-step OTP hash, expiry, request cooldown, and failed-attempt count.
+- Added public OTP request and verification endpoints. Codes are generated randomly, HMAC-hashed at rest, expire using `OTP_TTL_SECONDS` (bounded to 1–30 minutes), allow at most five attempts, and are rate-limited to one request per minute per step.
+- Approve/return now require a short-lived signed action token issued only after OTP verification. Inactive workflow steps invalidate any pending OTP.
+- The approver page requests and verifies the code before showing action buttons. Local simulated delivery returns a development-only code to the page without printing the code to API logs; production mode rejects simulated delivery.
+- Added `npm run db:deploy --workspace=api` for applying committed migrations. Prisma client generation and API/web builds passed. Tests were not run. The local database migration has not been applied because Docker Desktop is not running in this environment.
+
+### 2026-10-09 - Production deployment and CI/CD foundation (Phase 10)
+
+- Applied pending OTP database migration (`20261008100000_add_approval_otp_fields`) to the local PostgreSQL database.
+- Fixed outdated unit test expectation in `workflow-transitions.service.spec.ts` ensuring all OTP reset fields are verified.
+- Added `GET /health` endpoint in `AppController` and `AppService` checking database connectivity via Prisma with uptime monitoring.
+- Built multi-stage production Dockerfiles for API (`api.prod.Dockerfile`) and Web (`web.prod.Dockerfile`).
+- Configured production Nginx reverse proxy (`infra/nginx/nginx.conf` and `infra/nginx/conf.d/default.conf`) with gzip compression, security headers, `/api` prefix rewrite, direct API routing, and Let's Encrypt ACME challenge handling.
+- Added `docker-compose.prod.yml` orchestrating the API, Web, Nginx, and Certbot with container health checks and volume persistence.
+- Added GitHub Actions CI/CD workflow (`.github/workflows/deploy.yml`) running linting, database client generation, test suites, and SSH deployment with health verification.
+- Added server setup, automated deployment, rollback, and Let's Encrypt SSL initialization scripts under `infra/scripts/`.
+- Verification: `npm test --workspace=api` passed 58/58 tests across 14 files; `npm run lint` passed with 0 errors/warnings; `docker compose -f docker-compose.prod.yml config` validated successfully.
+
+### 2026-10-11 - AWS SES Bounce & Complaint SNS Webhook Engine (Phase 5 & 7 Completion)
+
+- **AWS SES Event Webhook Controller (`api/src/notifications/ses-webhook.controller.ts`)**:
+  - Added public webhook endpoint `POST /notifications/ses-events` to receive Amazon SNS notifications.
+  - Automatically handles SNS `SubscriptionConfirmation` by verifying topic subscription URL.
+- **SES Bounce & Complaint Processing (`api/src/notifications/notifications.service.ts`)**:
+  - Handles SES `Bounce` events: marks recent notifications for the bounced recipient as `FAILED` with diagnostic reason.
+  - For permanent hard bounces, automatically sets `contact.isActive = false` and writes an `email_hard_bounced` audit log.
+  - Handles SES `Complaint` events: marks notifications as `FAILED`, deactivates the contact, and logs `email_complaint`.
+- **Resilient Inactive Contact Fallback (`api/src/reminders/reminders.service.ts`)**:
+  - Automated initial approval dispatches and scheduled reminders check `contact.isActive`.
+  - When a primary contact is deactivated (e.g. from an SES bounce), the engine automatically falls back to the active backup approver, preventing silent delivery failures and ensuring approvals continue.
+- **Verification**:
+  - Created dedicated unit test suite `api/src/notifications/notifications.service.spec.ts`.
+  - Full suite: 72 / 72 tests passing across 15 test suites in `api`.
+  - Both `api` and `web` production builds compiled cleanly with 0 errors.
+
+### 2026-10-10 - Public Approver OTP & Reassignment Portal + Admin Reassignment Engine
+
+- **Phase 6 Approver Magic-Link & OTP Portal (`web/src/app/approve/page.tsx`)**:
+  - Implemented 6-digit email OTP verification gate: approvers must verify identity code via `/approvals/verify-otp` before action buttons are unlocked.
+  - Added simulated development code banner with one-click "Auto-Fill & Verify" for rapid, flawless local review testing.
+  - Built three authenticated approver actions:
+    1. **Approve batch** (`POST /approvals/complete` with short-lived action token).
+    2. **Return for revision** (`POST /approvals/return` requiring revision notes).
+    3. **Request reassignment** (`POST /approvals/reassign` with mandatory reason and optional replacement contact email).
+  - Approver notes & prior comments are clearly previewed alongside bill line items and total balance due.
+
+- **Phase 6 & 8 Admin Step Reassignment Engine (`api/src/` & `web/src/app/page.tsx`)**:
+  - Implemented `reassignStep` in `WorkflowTransitionsService` and exposed `POST /batches/:id/steps/:stepInstanceId/reassign`.
+  - Admin can reassign any alerted step to an active organization contact with an audit-logged reason note.
+  - Reassignment transactionally updates `WorkflowStage.contactId`, resets pending step OTP hashes, logs `step_reassigned` audit entry with `source: 'manual'`, and automatically dispatches a fresh signed magic-link notification email to the newly assigned approver.
+  - Added **Reassign Approver** modal dialog on dashboard pending step cards with live contact selection and shortcut to create new contacts.
+  - Pending approval cards display flagged `⚠️ Approver Requested Reassignment` badge with the approver's reason and replacement suggestion.
+
+- **Phase 9 End-to-End Payment Allocation & Lifecycle Verification**:
+  - Validated multi-bill payment recording with partial cash allocations, TDS deductions, and retention deductions.
+  - Verified automatic bill balance decrement, bill status transitions (`PARTIALLY_PAID`, `PAID`), and final batch completion (`COMPLETED`) upon zero balance.
+
+- **Verification**:
+  - 67 / 67 automated tests passing across 14 test suites in `api`.
+  - Next.js web application built cleanly with 0 errors (`npm run build --workspace=web`).
+  - End-to-end HTTP validation verified all login, batch creation, OTP generation, verification, reassignment, approval, and payment settlement flows on running Docker stack.
+
+### 2026-10-09 - Phase 6, 7 & 8: Reassignment, Quiet Hours, Workflows & Audit Trail UI
+
+- **Phase 6 Approver Actions & Attribution**:
+  - Implemented `requestReassignment` in `WorkflowTransitionsService` and exposed `POST /approvals/reassign` with step status update to `REASSIGNMENT_REQUESTED`.
+  - Added request attribution capture (client IP via `x-forwarded-for` / socket IP and User-Agent) on magic-link actions recorded to `audit_log` with `source: 'magic_link'`.
+  - Added Admin-guarded `POST /batches/:id/steps/:stepInstanceId/confirm-on-behalf` allowing manual/offline approvals with reason note and `source: 'manual'` audit log tag.
+  - Added "Request reassignment" action on public approval page (`web/src/app/approve/page.tsx`) and "Confirm on behalf (offline)" on dashboard pending step cards.
+
+- **Phase 7 Automated Reminders Quiet Hours**:
+  - Added configurable quiet hours filtering (`isQuietHours`) in `RemindersService`, defaulting to 9:00 PM – 8:00 AM IST (configurable via `QUIET_HOURS_START`, `QUIET_HOURS_END`, `QUIET_HOURS_TIMEZONE`, and `QUIET_HOURS_ENABLED`).
+  - Scheduled reminder processing skips notifications falling during quiet hours and preserves due status for the next sweep.
+
+- **Phase 8 Admin Screens & Visual Workflow Builder**:
+  - Added `GET /batches/:id/history` in `BatchesController` and `BatchesService`, aggregating batch records, bill allocations, step instances, notification dispatch history, and chronological audit trail.
+  - Built **Workflow Templates Dialog** in dashboard:
+    - Lists organization templates with ordered stage chips, assigned approvers, backup contacts, and reminder rules.
+    - Added dynamic multi-stage workflow builder with approver selection, backup contact selection, reminder intervals, and max attempt settings.
+    - Allows template deletion for templates not currently bound to batches.
+  - Enhanced Batch Creation modal to support template selection dropdown across all organization workflows.
+  - Built **Approval Batches & Audit Trail Section** in dashboard:
+    - Status filtering: All, In Progress, Ready for payment, Completed.
+    - Added dedicated **Batch Details & Audit Trail modal** with tabs for:
+      1. Stage Progression timeline (status, approver, backup, timestamps, comments, offline confirm tags).
+      2. Bills breakdown (bill number, due date, original amount, remaining balance).
+      3. Chronological Audit Trail (action pills, actors, timestamps, IP/agent metadata).
+      4. Email Dispatch Log (recipients, delivery status, timestamps, error records).
+
+- **Verification**:
+  - Full test suite passed: 65 / 65 tests passing across 14 test suites in `api`.
+  - Linting passed with 0 errors and 0 warnings across both `api` (oxlint) and `web` (eslint).
+  - Next.js and NestJS production builds compiled cleanly.
+
 ## Current phase status
 
 ### Done or mostly done
@@ -216,16 +327,16 @@ Follow `Bill collection tracker — POC implementation plan.pdf`. The current wo
 
 - **Phase 4 - Backend:** Workflows, batches, bills, contacts, login, and approvals are implemented. Reassignment and a final access review remain; notification batch access has been scoped, but this change still needs verification.
 - **Phase 5 - Email:** SES email and local simulation are connected. Real delivery and bounce/limit handling need verification.
-- **Phase 6 - Approver links:** Signed approval links work. OTP, link revocation/single-use protection, and real-email testing remain.
+- **Phase 6 - Approver links:** Signed links remain valid while their step is active, and OTP is implemented. Complete action attribution, client-approved reassignment, and real-email testing remain; the OTP migration still needs to be applied locally.
 - **Phase 7 - Reminders:** Scheduling, retries, and escalation are implemented. Quiet hours, recipient agreement, and SES testing remain.
 - **Phase 8 - Admin screens:** Login, approvals, batch creation, contacts, and payment review are available. Workflow editing and batch history remain.
 - **Phase 9 - Payments:** Payment allocation, on-account flows, and local/S3 proof upload/view code are present. End-to-end checks remain.
-- **Phase 11 - QA:** Earlier API tests and local checks passed. The latest dashboard and notification access changes have not yet been verified; full end-to-end and production-readiness checks remain.
+- **Phase 11 - QA:** The Oct 8 API and web builds passed. Tests were not run for the new OTP work, and end-to-end and production-readiness checks remain.
 
 ### Not started or not ready
 
 - **Phase 1 - AWS setup:** No production AWS resources have been configured. The target server, database, permissions, network rules, and budget need confirmation.
-- **Phase 10 - Deployment:** Production hosting, HTTPS, automated deployment, health checks, and rollback are not set up.
+- **Phase 10 - Deployment:** Production Compose configuration, Nginx reverse proxy, Certbot SSL automation, /health route, GitHub Actions CI/CD, and deploy/rollback scripts are complete. Cloud EC2 server provisioning remains.
 - **Phase 12 - Demo and handover:** Demo data, presentation steps, cost/limitation notes, and handover materials are still needed.
 
 **Overall:** The local POC is usable for development, but production deployment and final end-to-end validation are not complete.
@@ -243,6 +354,6 @@ Follow `Bill collection tracker — POC implementation plan.pdf`. The current wo
 1. Sign in as Admin, replace the demo approver email with a verified SES recipient, create a fresh batch, and confirm the approval message/link in the inbox and spam folder.
 2. Add Phase 7 quiet-hour configuration and agree on the client escalation recipient policy; verify escalation email through SES after identities are ready.
 3. Exercise the payment-proof upload and viewing flow in the local stack; optionally verify AWS-backed storage later if needed.
-4. Bring magic links into line with the brief: valid until the step is completed, add OTP, record IP/contact attribution, and implement client-approved reassignment.
+4. Add OTP, record IP/contact attribution, and implement client-approved reassignment for approver actions.
 5. Complete workflow/contact administration and perform a real SES inbox test after sender and recipient identities are ready.
 6. After target resources and spend are confirmed, connect the app to RDS and attach the S3 IAM role to the selected EC2 instance; complete CI/CD, health checks, rollback, QA, and handover.

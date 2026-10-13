@@ -6,7 +6,38 @@ type BillStatus = "Overdue" | "Due soon" | "Open" | "Partially paid" | "Disputed
 type WorkflowRecord = {
   id: string;
   name: string;
-  stages: Array<{ id: string; order: number; contact?: { id?: string; name?: string }; backupContact?: { id?: string; name?: string } }>;
+  organizationId?: string;
+  stages: Array<{
+    id?: string;
+    order: number;
+    reminderIntervalHours?: number;
+    maxReminders?: number;
+    contact?: { id?: string; name?: string; email?: string; role?: string };
+    backupContact?: { id?: string; name?: string; email?: string; role?: string };
+  }>;
+  _count?: { batches: number };
+};
+type BatchHistoryRecord = BatchRecord & {
+  template?: { id: string; name: string };
+  organization?: { id: string; name: string };
+  createdAt?: string;
+  notifications?: Array<{
+    id: string;
+    recipient: string;
+    status: string;
+    sentAt?: string | null;
+    error?: string | null;
+    createdAt: string;
+  }>;
+  auditLogs?: Array<{
+    id: string;
+    entityType: string;
+    entityId: string;
+    action: string;
+    actor: string;
+    detail?: Record<string, unknown> | string | number | boolean | null;
+    createdAt: string;
+  }>;
 };
 type Bill = {
   id: number | string;
@@ -33,11 +64,15 @@ type BatchRecord = {
   stepInstances?: Array<{
     id: string;
     status?: string;
+    lastComment?: string | null;
+    alertedAt?: string | null;
+    nextReminderAt?: string | null;
+    reminderCount?: number;
     stage?: {
       id?: string;
       order?: number;
-      contact?: { id?: string; name?: string };
-      backupContact?: { id?: string; name?: string };
+      contact?: { id?: string; name?: string; email?: string; role?: string };
+      backupContact?: { id?: string; name?: string; email?: string; role?: string };
     };
   }>;
 };
@@ -69,14 +104,7 @@ type PaymentRecord = {
 
 const emptyBatchBill = (): BatchBillDraft => ({ billNumber: "", amount: "", dueDate: "" });
 
-const startingBills: Bill[] = [
-  { id: 1, customer: "Tata Precision Components", invoice: "INV-2481", amount: 124000, balanceDue: 124000, due: "18 Sep", dueDate: "2026-09-18", status: "Overdue", isDemo: true },
-  { id: 2, customer: "Innotech Systems", invoice: "INV-2478", amount: 92000, balanceDue: 90000, due: "30 Sep", dueDate: "2026-09-30", status: "Partially paid", isDemo: true },
-  { id: 3, customer: "Greenfield Foods", invoice: "INV-2472", amount: 84500, balanceDue: 84500, due: "22 Sep", dueDate: "2026-09-22", status: "Overdue", isDemo: true },
-  { id: 4, customer: "Aurum Packaging", invoice: "INV-2469", amount: 47500, balanceDue: 47500, due: "02 Oct", dueDate: "2026-10-02", status: "Overdue", isDemo: true },
-  { id: 5, customer: "Bluepeak Logistics", invoice: "INV-2465", amount: 110000, balanceDue: 0, due: "16 Sep", dueDate: "2026-09-16", status: "Paid", isDemo: true },
-  { id: 6, customer: "Northstar Labs", invoice: "INV-2461", amount: 68000, balanceDue: 68000, due: "07 Oct", dueDate: "2026-10-07", status: "Due soon", isDemo: true },
-];
+const startingBills: Bill[] = [];
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("en-IN", {
@@ -132,7 +160,7 @@ const toDisplayBills = (batchData: BatchRecord[] | undefined): Bill[] => {
 
       return {
         id: bill.id ?? `${batch.id}-${invoice}`,
-        customer: batch.id ? "Demo Organization" : "Customer",
+        customer: batch.stepInstances?.[0]?.stage?.contact?.name ?? (batch.id ? "Demo Organization" : "Customer"),
         invoice,
         amount: Number.isFinite(amount) ? amount : 0,
         balanceDue: Number.isFinite(balanceDue) ? balanceDue : 0,
@@ -159,6 +187,19 @@ const avatarSeed = (value: number | string) =>
       .split("")
       .reduce((sum, char) => sum + char.charCodeAt(0), 0),
   ) % 4;
+
+function getApiBase(): string {
+  if (typeof window !== "undefined") {
+    const envUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (envUrl && !envUrl.includes("localhost")) {
+      return envUrl;
+    }
+    if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+      return `${window.location.protocol}//${window.location.hostname}:3001`;
+    }
+  }
+  return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+}
 
 export default function Home() {
   const [bills, setBills] = useState(startingBills);
@@ -188,7 +229,47 @@ export default function Home() {
   const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState({ customer: "", invoice: "", amount: "", due: "" });
   const [liveWorkflow, setLiveWorkflow] = useState<WorkflowRecord | null>(null);
+  const [workflows, setWorkflows] = useState<WorkflowRecord[]>([]);
+  const [workflowsDialogOpen, setWorkflowsDialogOpen] = useState(false);
+  const [isSavingWorkflow, setIsSavingWorkflow] = useState(false);
+  const [newWorkflowName, setNewWorkflowName] = useState("");
+  const [newWorkflowStages, setNewWorkflowStages] = useState<Array<{ contactId: string; backupContactId: string; reminderIntervalHours: number; maxReminders: number }>>([
+    { contactId: "", backupContactId: "", reminderIntervalHours: 24, maxReminders: 3 },
+  ]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [batchHistoryDialogOpen, setBatchHistoryDialogOpen] = useState(false);
+  const [selectedBatchHistory, setSelectedBatchHistory] = useState<BatchHistoryRecord | null>(null);
+  const [isLoadingBatchHistory, setIsLoadingBatchHistory] = useState(false);
+  const [historyTab, setHistoryTab] = useState<"stages" | "bills" | "audit" | "notifications">("stages");
+  const [batchFilter, setBatchFilter] = useState<"ALL" | "IN_PROGRESS" | "READY_FOR_PAYMENT" | "COMPLETED">("ALL");
   const [liveBatches, setLiveBatches] = useState<BatchRecord[]>([]);
+  const [currentDateTime, setCurrentDateTime] = useState<string>("");
+  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [reassignTarget, setReassignTarget] = useState<{ batchId: string; stepId: string; currentContactName?: string } | null>(null);
+  const [reassignNewContactId, setReassignNewContactId] = useState("");
+  const [reassignReason, setReassignReason] = useState("");
+  const [isSubmittingReassign, setIsSubmittingReassign] = useState(false);
+
+  useEffect(() => {
+    const updateClock = () => {
+      const now = new Date();
+      setCurrentDateTime(
+        new Intl.DateTimeFormat("en-IN", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        }).format(now)
+      );
+    };
+    updateClock();
+    const timer = setInterval(updateClock, 1000);
+    return () => clearInterval(timer);
+  }, []);
   const [liveBatchCount, setLiveBatchCount] = useState<number | null>(null);
   const [apiStatus, setApiStatus] = useState<"loading" | "connected" | "offline">("loading");
   const [approvalComment, setApprovalComment] = useState("");
@@ -197,7 +278,7 @@ export default function Home() {
   const [authToken, setAuthToken] = useState<string | null>(null);
 
   async function loginAs(email: string, password: string): Promise<string | null> {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const apiBase = getApiBase();
     const response = await fetch(`${apiBase}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -218,22 +299,62 @@ export default function Home() {
     return payload.token;
   }
 
-  async function loadContacts() {
+  async function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
+    let token = authToken || (typeof window !== "undefined" ? localStorage.getItem("thoorigai-token") : null);
+    if (!token) {
+      const email = currentUser?.email || "admin@example.test";
+      token = await loginAs(email, "demo123");
+    }
+
+    const headers = new Headers(init.headers);
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+
+    let response = await fetch(url, { ...init, headers });
+    if (response.status === 401) {
+      const email = currentUser?.email || "admin@example.test";
+      const freshToken = await loginAs(email, "demo123");
+      if (freshToken) {
+        headers.set("Authorization", `Bearer ${freshToken}`);
+        response = await fetch(url, { ...init, headers });
+      }
+    }
+    return response;
+  }
+
+  async function fetchContacts(tokenOverride?: string): Promise<ContactRecord[]> {
+    const token = tokenOverride || authToken;
+    if (!token || !currentUser) return [];
+    const apiBase = getApiBase();
+    try {
+      const response = await fetch(`${apiBase}/contacts?organizationId=${encodeURIComponent(currentUser.organizationId)}`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) return [];
+      const data = (await response.json()) as ContactRecord[];
+      setContacts(data);
+      return data;
+    } catch {
+      return [];
+    }
+  }
+
+  async function openContactsDialog() {
     if (!currentUser || !authToken) return;
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-    const response = await fetch(`${apiBase}/contacts?organizationId=${encodeURIComponent(currentUser.organizationId)}`, {
-      cache: "no-store",
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
-    if (!response.ok) throw new Error("Unable to load organization contacts.");
-    setContacts((await response.json()) as ContactRecord[]);
-    setContactsDialogOpen(true);
+    try {
+      await fetchContacts();
+      setContactsDialogOpen(true);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Unable to load contacts.");
+    }
   }
 
   async function saveContact(contact: ContactRecord) {
     if (!currentUser || !authToken) return;
     setIsSavingContact(true);
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const apiBase = getApiBase();
     try {
       const response = await fetch(`${apiBase}/contacts/${contact.id}?organizationId=${encodeURIComponent(currentUser.organizationId)}`, {
         method: "PATCH",
@@ -246,6 +367,7 @@ export default function Home() {
       }
       const updated = (await response.json()) as ContactRecord;
       setContacts((current) => current.map((item) => item.id === updated.id ? updated : item));
+      if (authToken) void loadWorkflows(authToken);
       setNotice("Contact updated.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Unable to update this contact.");
@@ -258,7 +380,7 @@ export default function Home() {
     event.preventDefault();
     if (!currentUser || !authToken) return;
     setIsSavingContact(true);
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const apiBase = getApiBase();
     try {
       const response = await fetch(`${apiBase}/contacts`, {
         method: "POST",
@@ -281,7 +403,7 @@ export default function Home() {
   }
 
   async function fetchPaymentsForBatch(batchId: string, token: string): Promise<PaymentRecord[]> {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const apiBase = getApiBase();
     const response = await fetch(`${apiBase}/payments/batch/${encodeURIComponent(batchId)}`, {
       cache: "no-store",
       headers: { Authorization: `Bearer ${token}` },
@@ -312,7 +434,7 @@ export default function Home() {
       return;
     }
 
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const apiBase = getApiBase();
     setIsUploadingProofFor(paymentId);
     try {
       const response = await fetch(`${apiBase}/payments/${encodeURIComponent(paymentId)}/proof-file`, {
@@ -343,7 +465,7 @@ export default function Home() {
 
   async function createPaymentProofViewLink(paymentId: string) {
     if (!authToken) return;
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const apiBase = getApiBase();
     try {
       const response = await fetch(`${apiBase}/payments/${encodeURIComponent(paymentId)}/proof-download-url`, {
         cache: "no-store",
@@ -380,13 +502,14 @@ export default function Home() {
   }
 
   useEffect(() => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const apiBase = getApiBase();
     let isMounted = true;
     const fetchDashboard = (token: string) => {
       const headers = { Authorization: `Bearer ${token}` };
       return Promise.all([
         fetch(`${apiBase}/workflows?organizationId=demo-org`, { cache: "no-store", headers }),
         fetch(`${apiBase}/batches?organizationId=demo-org`, { cache: "no-store", headers }),
+        fetch(`${apiBase}/contacts?organizationId=demo-org`, { cache: "no-store", headers }),
       ]);
     };
 
@@ -407,16 +530,16 @@ export default function Home() {
         }
       }
 
-      if (!token) token = await loginAs("approver@example.test", "demo123");
+      if (!token) token = await loginAs("admin@example.test", "demo123");
       if (!token) throw new Error("Authentication failed");
 
-      let [workflowResponse, batchResponse] = await fetchDashboard(token);
+      let [workflowResponse, batchResponse, contactsResponse] = await fetchDashboard(token);
       if (workflowResponse.status === 401 || batchResponse.status === 401) {
         window.localStorage.removeItem("thoorigai-token");
         window.localStorage.removeItem("thoorigai-user");
-        token = await loginAs("approver@example.test", "demo123");
+        token = await loginAs("admin@example.test", "demo123");
         if (!token) throw new Error("Authentication failed");
-        [workflowResponse, batchResponse] = await fetchDashboard(token);
+        [workflowResponse, batchResponse, contactsResponse] = await fetchDashboard(token);
       }
 
       if (!workflowResponse.ok || !batchResponse.ok) throw new Error("API request failed");
@@ -432,7 +555,14 @@ export default function Home() {
 
       const derivedBills = toDisplayBills(batchData);
       setBills(derivedBills);
-      setLiveWorkflow(Array.isArray(workflowData) && workflowData[0] ? workflowData[0] : null);
+      if (contactsResponse && contactsResponse.ok) {
+        const contactsData = (await contactsResponse.json()) as ContactRecord[];
+        setContacts(contactsData);
+      }
+      const safeWorkflows = Array.isArray(workflowData) ? workflowData : [];
+      setWorkflows(safeWorkflows);
+      setLiveWorkflow(safeWorkflows[0] ?? null);
+      if (safeWorkflows[0]) setSelectedTemplateId(safeWorkflows[0].id);
       setLiveBatches(batchData);
       setPaymentRecords(Object.fromEntries(paymentEntries));
       setLiveBatchCount(Array.isArray(batchData) ? batchData.length : 0);
@@ -516,14 +646,13 @@ export default function Home() {
     }
 
     setIsSubmittingApproval(true);
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const apiBase = getApiBase();
     const actor = currentUser?.id ?? step.stage?.contact?.id ?? step.stage?.backupContact?.id ?? "demo-approver";
 
-    const response = await fetch(`${apiBase}/workflows/steps/${step.id}/${action}`, {
+    const response = await authFetch(`${apiBase}/workflows/steps/${step.id}/${action}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       },
       body: JSON.stringify({
         actor,
@@ -556,6 +685,279 @@ export default function Home() {
     }
   }
 
+  async function openApprovalLink(stepId: string) {
+    if (!authToken) return;
+    const apiBase = getApiBase();
+    try {
+      const response = await fetch(`${apiBase}/workflows/steps/${encodeURIComponent(stepId)}/approval-link`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!response.ok) throw new Error("Could not generate approval link.");
+      const data = (await response.json()) as { url: string; token?: string; approverEmail: string };
+      let targetUrl = data.url;
+      try {
+        const parsed = new URL(data.url);
+        targetUrl = `${window.location.origin}${parsed.pathname}${parsed.search}`;
+      } catch {
+        targetUrl = data.url;
+      }
+      window.open(targetUrl, "_blank");
+      setNotice(`Opened approval link for ${data.approverEmail} in a new tab.`);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not open approval link.");
+    }
+  }
+
+  async function submitConfirmOnBehalf(batchId: string, stepInstanceId: string) {
+    if (!authToken || !currentUser) return;
+    setIsSubmittingApproval(true);
+    const apiBase = getApiBase();
+    try {
+      const response = await fetch(`${apiBase}/batches/${encodeURIComponent(batchId)}/steps/${encodeURIComponent(stepInstanceId)}/confirm-on-behalf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ note: approvalComment.trim() || undefined }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { message?: string };
+        throw new Error(payload.message || "Could not confirm on behalf of approver.");
+      }
+      setApprovalComment("");
+      setNotice("Step confirmed on behalf of approver (offline/manual confirmation logged).");
+
+      const organizationId = currentUser.organizationId ?? "demo-org";
+      const batchResponse = await fetch(`${apiBase}/batches?organizationId=${encodeURIComponent(organizationId)}`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (batchResponse.ok) {
+        const freshBatch = (await batchResponse.json()) as BatchRecord[];
+        setBills(toDisplayBills(freshBatch));
+        setLiveBatches(freshBatch);
+        setLiveBatchCount(freshBatch.length);
+        await refreshPaymentRecords(freshBatch, authToken);
+      }
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Confirmation failed.");
+    } finally {
+      setIsSubmittingApproval(false);
+    }
+  }
+
+  async function submitReassignStep() {
+    if (!authToken || !currentUser || !reassignTarget || !reassignNewContactId) return;
+    setIsSubmittingReassign(true);
+    const apiBase = getApiBase();
+    try {
+      const response = await fetch(
+        `${apiBase}/batches/${encodeURIComponent(reassignTarget.batchId)}/steps/${encodeURIComponent(reassignTarget.stepId)}/reassign`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({
+            newContactId: reassignNewContactId,
+            reason: reassignReason.trim() || undefined,
+          }),
+        }
+      );
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { message?: string };
+        throw new Error(payload.message || "Failed to reassign step.");
+      }
+      setNotice("Step successfully reassigned! The new approver has been notified.");
+      setReassignModalOpen(false);
+      setReassignTarget(null);
+      setReassignReason("");
+      setReassignNewContactId("");
+
+      const organizationId = currentUser.organizationId ?? "demo-org";
+      const batchResponse = await fetch(`${apiBase}/batches?organizationId=${encodeURIComponent(organizationId)}`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (batchResponse.ok) {
+        const freshBatch = (await batchResponse.json()) as BatchRecord[];
+        setBills(toDisplayBills(freshBatch));
+        setLiveBatches(freshBatch);
+        setLiveBatchCount(freshBatch.length);
+        await refreshPaymentRecords(freshBatch, authToken);
+      }
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Reassignment failed.");
+    } finally {
+      setIsSubmittingReassign(false);
+    }
+  }
+
+  async function loadWorkflows(tokenOverride?: string) {
+    const token = tokenOverride || authToken;
+    if (!token || !currentUser) return;
+    const apiBase = getApiBase();
+    try {
+      const response = await fetch(`${apiBase}/workflows?organizationId=${encodeURIComponent(currentUser.organizationId)}`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = (await response.json()) as WorkflowRecord[];
+        setWorkflows(data);
+        if (data[0] && !selectedTemplateId) {
+          setSelectedTemplateId(data[0].id);
+          setLiveWorkflow(data[0]);
+        }
+      }
+    } catch {
+      // non-fatal
+    }
+  }
+
+  async function openWorkflowsDialog() {
+    if (!currentUser || !authToken) return;
+    try {
+      await loadWorkflows();
+      if (contacts.length === 0) {
+        const apiBase = getApiBase();
+        const res = await fetch(`${apiBase}/contacts?organizationId=${encodeURIComponent(currentUser.organizationId)}`, {
+          cache: "no-store",
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        if (res.ok) setContacts((await res.json()) as ContactRecord[]);
+      }
+      setWorkflowsDialogOpen(true);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not load workflows");
+    }
+  }
+
+  async function createWorkflow(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!authToken || !currentUser) return;
+    if (!newWorkflowName.trim()) {
+      setNotice("Workflow template name is required.");
+      return;
+    }
+    if (newWorkflowStages.some((stage) => !stage.contactId)) {
+      setNotice("Please select a primary approver contact for every stage.");
+      return;
+    }
+
+    setIsSavingWorkflow(true);
+    const apiBase = getApiBase();
+    try {
+      const response = await fetch(`${apiBase}/workflows`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({
+          organizationId: currentUser.organizationId,
+          name: newWorkflowName.trim(),
+          stages: newWorkflowStages.map((s) => ({
+            contactId: s.contactId,
+            ...(s.backupContactId ? { backupContactId: s.backupContactId } : {}),
+            reminderIntervalHours: Number(s.reminderIntervalHours) || 24,
+            maxReminders: Number(s.maxReminders) || 3,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { message?: string | string[] };
+        const msg = Array.isArray(payload.message) ? payload.message.join(" ") : payload.message;
+        throw new Error(msg || "Could not create workflow template.");
+      }
+
+      const createdWf = (await response.json().catch(() => ({}))) as WorkflowRecord;
+      await loadWorkflows();
+      if (createdWf?.id) {
+        setSelectedTemplateId(createdWf.id);
+        setLiveWorkflow(createdWf);
+      }
+      setNewWorkflowName("");
+      setNewWorkflowStages([{ contactId: "", backupContactId: "", reminderIntervalHours: 24, maxReminders: 3 }]);
+      setNotice(`Workflow "${createdWf?.name || "Template"}" created and selected for new batches.`);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Workflow creation failed.");
+    } finally {
+      setIsSavingWorkflow(false);
+    }
+  }
+
+  async function deleteWorkflow(id: string) {
+    if (!authToken || !currentUser) return;
+    const apiBase = getApiBase();
+    try {
+      const response = await fetch(`${apiBase}/workflows/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { message?: string };
+        throw new Error(payload.message || "Could not delete workflow template.");
+      }
+      await loadWorkflows();
+      setNotice("Workflow template deleted.");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Delete failed.");
+    }
+  }
+
+  async function deleteBatch(batchId: string) {
+    if (!currentUser || currentUser.role.toLowerCase() !== "admin") {
+      setNotice("Only administrators can delete batches.");
+      return;
+    }
+    if (!window.confirm("Are you sure you want to delete this batch and its bills?")) {
+      return;
+    }
+    const apiBase = getApiBase();
+    try {
+      const response = await authFetch(`${apiBase}/batches/${encodeURIComponent(batchId)}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { message?: string };
+        throw new Error(payload.message || "Failed to delete batch.");
+      }
+      const orgId = currentUser.organizationId || "demo-org";
+      const bResp = await authFetch(`${apiBase}/batches?organizationId=${encodeURIComponent(orgId)}`, {
+        cache: "no-store",
+      });
+      if (bResp.ok) {
+        const updated = (await bResp.json()) as BatchRecord[];
+        setBills(toDisplayBills(updated));
+        setLiveBatches(updated);
+        setLiveBatchCount(updated.length);
+      }
+      setNotice("Batch and its bills deleted successfully.");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Delete failed.");
+    }
+  }
+
+  async function openBatchHistory(batchId: string) {
+    if (!authToken || !currentUser) return;
+    setIsLoadingBatchHistory(true);
+    setSelectedBatchHistory(null);
+    setHistoryTab("stages");
+    setBatchHistoryDialogOpen(true);
+    const apiBase = getApiBase();
+    try {
+      const response = await fetch(`${apiBase}/batches/${encodeURIComponent(batchId)}/history`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!response.ok) {
+        throw new Error("Unable to load batch audit trail and history.");
+      }
+      const data = (await response.json()) as BatchHistoryRecord;
+      setSelectedBatchHistory(data);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "History fetch failed.");
+    } finally {
+      setIsLoadingBatchHistory(false);
+    }
+  }
+
   async function createBatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!authToken || !currentUser || !liveWorkflow) {
@@ -564,17 +966,16 @@ export default function Home() {
     }
 
     setIsCreatingBatch(true);
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const apiBase = getApiBase();
     try {
-      const response = await fetch(`${apiBase}/batches`, {
+      const response = await authFetch(`${apiBase}/batches`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           organizationId: currentUser.organizationId,
-          templateId: liveWorkflow.id,
+          templateId: selectedTemplateId || liveWorkflow.id,
           bills: batchBills.map((bill) => ({
             billNumber: bill.billNumber.trim(),
             amount: Number(bill.amount),
@@ -699,7 +1100,7 @@ export default function Home() {
     );
     const paymentTotalCents = isOnAccountEntry ? Math.round(Number(onAccountAmount) * 100) : allocatedTotalCents;
     setIsSavingPayment(true);
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const apiBase = getApiBase();
     try {
       const allocationPayload = allocations.map((line) => ({
         billId: line.billId,
@@ -790,13 +1191,14 @@ export default function Home() {
         <nav className="primary-nav" aria-label="Main navigation">
           <a className="nav-item active" href="#overview"><span className="nav-glyph">◫</span>Overview</a>
           <a className="nav-item" href="#bills"><span className="nav-glyph">▤</span>Bills<span className="nav-count">{bills.length}</span></a>
+          <a className="nav-item" href="#batches"><span className="nav-glyph">◷</span>Batches<span className="nav-count">{liveBatches.length}</span></a>
         </nav>
 
         <div className="sidebar-bottom">
           <div className="demo-note"><span className="demo-dot" />Demo workspace</div>
           <div className="profile-row">
-            <span className="profile-avatar">AD</span>
-            <span className="profile-copy"><strong>Admin user</strong><small>Thoorigai Infotech</small></span>
+            <span className="profile-avatar">{currentUser ? initials(currentUser.name) : "AD"}</span>
+            <span className="profile-copy"><strong>{currentUser?.name ?? "Admin user"}</strong><small>{currentUser?.role ?? "Admin"} · Thoorigai</small></span>
             <span className="profile-more" aria-hidden="true">···</span>
           </div>
         </div>
@@ -805,20 +1207,84 @@ export default function Home() {
       <section className="main-panel" id="overview">
         <header className="topbar">
           <div className="breadcrumb">Workspace <span>/</span> Overview</div>
-          <div className="topbar-right"><span className="sync-state"><span />Demo data</span><span className="topbar-date">Tuesday, 29 September 2026</span></div>
+          <div className="topbar-right"><span className="sync-state"><span />Live API</span><span className="topbar-date">{currentDateTime || "Loading date..."}</span></div>
         </header>
 
         <div className="page-content">
+          <section className="demo-user-bar" aria-label="Demo role switcher" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#f0f5ee", borderRadius: 6, border: "1px solid #dce8db", marginBottom: 22, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--forest)", letterSpacing: "0.5px" }}>ACT AS ROLE:</span>
+            <button
+              className="secondary-button"
+              type="button"
+              style={{
+                height: 34,
+                padding: "0 14px",
+                fontSize: 12,
+                fontWeight: currentUser?.role?.toLowerCase() === "admin" ? 700 : 500,
+                borderColor: currentUser?.role?.toLowerCase() === "admin" ? "var(--forest)" : "#dce4de",
+                background: currentUser?.role?.toLowerCase() === "admin" ? "#e4ede5" : "#fff",
+                color: currentUser?.role?.toLowerCase() === "admin" ? "var(--forest)" : "#56655c",
+              }}
+              onClick={() => void loginAs("admin@example.test", "demo123")}
+            >
+              👑 Admin
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              style={{
+                height: 34,
+                padding: "0 14px",
+                fontSize: 12,
+                fontWeight: currentUser?.email === "approver@example.test" ? 700 : 500,
+                borderColor: currentUser?.email === "approver@example.test" ? "var(--forest)" : "#dce4de",
+                background: currentUser?.email === "approver@example.test" ? "#e4ede5" : "#fff",
+                color: currentUser?.email === "approver@example.test" ? "var(--forest)" : "#56655c",
+              }}
+              onClick={() => void loginAs("approver@example.test", "demo123")}
+            >
+              👤 Primary Approver (Stage 1)
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              style={{
+                height: 34,
+                padding: "0 14px",
+                fontSize: 12,
+                fontWeight: currentUser?.email === "backup@example.test" ? 700 : 500,
+                borderColor: currentUser?.email === "backup@example.test" ? "var(--forest)" : "#dce4de",
+                background: currentUser?.email === "backup@example.test" ? "#e4ede5" : "#fff",
+                color: currentUser?.email === "backup@example.test" ? "var(--forest)" : "#56655c",
+              }}
+              onClick={() => void loginAs("backup@example.test", "demo123")}
+            >
+              🛡️ Backup Approver (Stage 2)
+            </button>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12, fontSize: 12 }}>
+              <span style={{ color: "var(--muted)" }}>Signed in:</span>
+              <strong style={{ color: "var(--forest)" }}>
+                {currentUser ? `${currentUser.name} (${currentUser.role})` : "Admin user (Admin)"}
+              </strong>
+            </div>
+          </section>
+
           <section className="welcome-row">
             <div>
               <p className="eyebrow">COLLECTIONS AT A GLANCE</p>
-              <h1>Good morning, Admin<span>.</span></h1>
+              <h1>Good morning, {currentUser ? currentUser.name.split(" ")[0] : "Admin"}<span>.</span></h1>
               <p className="welcome-subtitle">Here is where your receivables stand today.</p>
             </div>
             <div className="welcome-actions">
               <button className="secondary-button" onClick={() => setDialogOpen(true)}>Add demo bill</button>
-              {currentUser?.role === "Admin" && <button className="secondary-button" onClick={() => void loadContacts().catch((error: unknown) => setNotice(error instanceof Error ? error.message : "Unable to load contacts."))}>Manage contacts</button>}
-              <button className="primary-button" disabled={apiStatus !== "connected" || !liveWorkflow} onClick={() => setBatchDialogOpen(true)}>
+              {currentUser?.role?.toLowerCase() === "admin" && (
+                <>
+                  <button className="secondary-button" onClick={() => void openWorkflowsDialog()}>Workflows ({workflows.length})</button>
+                  <button className="secondary-button" onClick={() => void openContactsDialog()}>Contacts ({contacts.length})</button>
+                </>
+              )}
+              <button className="secondary-button" onClick={() => { document.getElementById("batches")?.scrollIntoView({ behavior: "smooth" }); }}>Batches ({liveBatches.length})</button>
+              <button className="primary-button" disabled={apiStatus !== "connected" || (!liveWorkflow && workflows.length === 0)} onClick={() => setBatchDialogOpen(true)}>
                 <span aria-hidden="true">＋</span> Create batch
               </button>
             </div>
@@ -855,8 +1321,16 @@ export default function Home() {
 
                 <div className="workflow-details" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                   <div>
-                    <strong>{step.stage?.contact?.name ?? "Assigned approver"}</strong>
-                    <span>Stage {step.stage?.order ?? 1} is awaiting action for {(batch.bills ?? []).map((bill) => bill.billNumber).filter(Boolean).join(", ") || "this batch"}.</span>
+                    <strong>{step.stage?.contact?.name ?? "Assigned approver"} ({step.stage?.contact?.email})</strong>
+                    <span>
+                      Stage {step.stage?.order ?? 1} is awaiting action for {(batch.bills ?? []).map((bill) => bill.billNumber).filter(Boolean).join(", ") || "this batch"}.
+                      {step.stage?.backupContact && ` · Backup: ${step.stage.backupContact.name}`}
+                    </span>
+                    {step.lastComment && (
+                      <div style={{ marginTop: 6, fontSize: "0.85rem", color: step.lastComment.includes("Reassignment") ? "#be123c" : "#0369a1", background: step.lastComment.includes("Reassignment") ? "#fff1f2" : "#f0f9ff", padding: "4px 8px", borderRadius: 4, display: "inline-block" }}>
+                        💬 {step.lastComment}
+                      </div>
+                    )}
                   </div>
                   <div className="approval-buttons" style={{ marginLeft: "auto" }}>
                     <button className="secondary-button" type="button" onClick={() => void loginAs("approver@example.test", "demo123")}>Approver</button>
@@ -890,6 +1364,41 @@ export default function Home() {
                   <div className="approval-buttons">
                     <button className="primary-button" disabled={isSubmittingApproval || !currentUser || !isAssignedApprover} onClick={() => void submitApproval("complete", step.id)}>Approve step</button>
                     <button className="secondary-button" disabled={isSubmittingApproval || !currentUser || !isAssignedApprover} onClick={() => void submitApproval("return", step.id)}>Return for correction</button>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => void openApprovalLink(step.id)}
+                      title="Open signed magic link in email approver view"
+                    >
+                      Open Magic Link ↗
+                    </button>
+                    {currentUser?.role.toLowerCase() === "admin" && (
+                      <>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          disabled={isSubmittingApproval}
+                          onClick={() => {
+                            setReassignTarget({ batchId: batch.id, stepId: step.id, currentContactName: step.stage?.contact?.name });
+                            setReassignNewContactId(contacts.find((c) => c.id !== step.stage?.contact?.id)?.id || "");
+                            setReassignReason("");
+                            setReassignModalOpen(true);
+                          }}
+                          title="Reassign this workflow step to another active contact"
+                        >
+                          🔄 Reassign Approver
+                        </button>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          disabled={isSubmittingApproval}
+                          onClick={() => void submitConfirmOnBehalf(batch.id, step.id)}
+                          title="Record manual/phone confirmation on behalf of approver (audit logged)"
+                        >
+                          Confirm on behalf (offline)
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </section>
@@ -926,6 +1435,17 @@ export default function Home() {
                     <div className="payment-review-actions">
                       <button className="secondary-button" type="button" onClick={() => openOnAccountEntry(batch)}>Record on account</button>
                       <button className="primary-button" type="button" onClick={() => openPaymentEntry(batch)}>Record payment</button>
+                      {currentUser?.role?.toLowerCase() === "admin" && (
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          style={{ borderColor: "#fecaca", color: "#be123c", background: "#fff1f2" }}
+                          onClick={() => void deleteBatch(batch.id)}
+                          title="Delete this batch and its bills"
+                        >
+                          🗑️ Delete batch
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1047,12 +1567,118 @@ export default function Home() {
                       <td className="action-cell">{bill.isDemo && bill.status !== "Paid" && <button className="row-action" onClick={() => markPaid(bill.id)} aria-label={`Mark ${bill.invoice} as paid`}>Mark paid</button>}</td>
                     </tr>
                   ))}
-                  {visibleBills.length === 0 && <tr><td className="empty-state" colSpan={6}>No bills match this view.</td></tr>}
+                  {visibleBills.length === 0 && <tr><td className="empty-state" colSpan={6}>No bills yet. Click &quot;Create batch&quot; above to start your live approval flow.</td></tr>}
                 </tbody>
               </table>
             </div>
             <div className="table-footer"><span>Showing {visibleBills.length} of {bills.length} bills</span><span>Amounts shown in INR <b>·</b> Demo data</span></div>
           </section>
+          <section className="bills-section batches-section" id="batches">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">WORKFLOW & AUDIT TRAIL</p>
+                <h2>Approval batches <span className="section-total">{liveBatches.length}</span></h2>
+              </div>
+            </div>
+
+            <div className="table-toolbar">
+              <div className="filter-tabs" role="tablist" aria-label="Filter batches">
+                {(["ALL", "IN_PROGRESS", "READY_FOR_PAYMENT", "COMPLETED"] as const).map((opt) => {
+                  const label = opt === "ALL" ? "All batches" : opt === "IN_PROGRESS" ? "In progress" : opt === "READY_FOR_PAYMENT" ? "Ready for payment" : "Completed";
+                  const count = opt === "ALL" ? liveBatches.length : liveBatches.filter((b) => b.status === opt).length;
+                  return (
+                    <button
+                      key={opt}
+                      role="tab"
+                      aria-selected={batchFilter === opt}
+                      className={`filter-tab ${batchFilter === opt ? "selected" : ""}`}
+                      onClick={() => setBatchFilter(opt)}
+                    >
+                      {label}
+                      <span>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Batch ID</th>
+                    <th>Workflow</th>
+                    <th>Status</th>
+                    <th>Bills count</th>
+                    <th className="amount-heading">Total amount</th>
+                    <th style={{ textAlign: "right" }}>Audit trail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {liveBatches
+                    .filter((batch) => batchFilter === "ALL" || batch.status === batchFilter)
+                    .map((batch) => {
+                      const totalBatchAmount = (batch.bills ?? []).reduce(
+                        (sum, bill) => sum + Number(bill.amount ?? 0),
+                        0,
+                      );
+                      const totalRemaining = (batch.bills ?? []).reduce(
+                        (sum, bill) => sum + Number(bill.balanceDue ?? 0),
+                        0,
+                      );
+                      const activeStep = batch.stepInstances?.find((s) => s.status === "ALERTED");
+                      return (
+                        <tr key={batch.id}>
+                          <td><strong>Batch {batch.id.slice(0, 8)}</strong></td>
+                          <td>
+                            <span>Stage {activeStep?.stage?.order ?? batch.stepInstances?.length ?? 1} · {activeStep?.stage?.contact?.name ?? "Completed"}</span>
+                          </td>
+                          <td>
+                            <span className={`status-pill status-${batch.status?.toLowerCase().replace(/_/g, "-") ?? "in-progress"}`}>
+                              <i />
+                              {batch.status ?? "IN_PROGRESS"}
+                            </span>
+                          </td>
+                          <td>{(batch.bills ?? []).length} bill(s)</td>
+                          <td className="amount-cell">
+                            {formatCurrency(totalBatchAmount)}
+                            <small>{formatCurrency(totalRemaining)} remaining</small>
+                          </td>
+                          <td className="action-cell" style={{ textAlign: "right" }}>
+                            <div style={{ display: "inline-flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
+                              <button
+                                className="secondary-button"
+                                type="button"
+                                onClick={() => void openBatchHistory(batch.id)}
+                              >
+                                Audit trail & details →
+                              </button>
+                              {currentUser?.role?.toLowerCase() === "admin" && (
+                                <button
+                                  className="secondary-button"
+                                  type="button"
+                                  style={{ borderColor: "#fecaca", color: "#be123c", background: "#fff1f2", padding: "0 10px", fontSize: 11 }}
+                                  onClick={() => void deleteBatch(batch.id)}
+                                  title="Delete this batch and all its bills"
+                                >
+                                  🗑️ Delete
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  {liveBatches.length === 0 && (
+                    <tr>
+                      <td className="empty-state" colSpan={6}>No batches created yet. Create a batch above to start the approval flow.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
           <footer className="page-footer"><span>THOORIGAI LEDGER <i>·</i> COLLECTIONS WORKSPACE</span><span>Built for a clearer view of every rupee.</span></footer>
         </div>
       </section>
@@ -1075,11 +1701,101 @@ export default function Home() {
       {batchDialogOpen && <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !isCreatingBatch) setBatchDialogOpen(false); }}>
         <section className="bill-dialog batch-dialog" role="dialog" aria-modal="true" aria-labelledby="batch-dialog-title">
           <div className="dialog-heading">
-            <div><p className="eyebrow">{liveWorkflow?.name ?? "WORKFLOW"}</p><h2 id="batch-dialog-title">Create approval batch</h2></div>
+            <div>
+              <p className="eyebrow">{liveWorkflow?.name ?? "WORKFLOW"}</p>
+              <h2 id="batch-dialog-title">Create approval batch</h2>
+              {(() => {
+                const stageContactId = liveWorkflow?.stages?.[0]?.contact?.id;
+                const freshContact = contacts.find((c) => c.id === stageContactId) ?? liveWorkflow?.stages?.[0]?.contact;
+                const contactName = freshContact?.name ?? "Demo Approver";
+                const contactEmail = freshContact?.email ?? "christyjenisha12@gmail.com";
+                return (
+                  <div style={{ marginTop: 8, padding: "8px 12px", background: "#f0f7f2", borderRadius: 6, border: "1px solid #d2e7d7", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 12, color: "#486252" }}>📧 Magic Link will be sent to:</span>
+                    <strong style={{ fontSize: 13, color: "var(--forest)" }}>{contactName} ({contactEmail})</strong>
+                  </div>
+                );
+              })()}
+            </div>
             <button className="dialog-close" type="button" onClick={() => setBatchDialogOpen(false)} disabled={isCreatingBatch} aria-label="Close dialog">×</button>
           </div>
           <p className="dialog-description">Add one or more bills. The first approver will be notified after the batch is saved.</p>
           <form onSubmit={createBatch}>
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <label style={{ color: "#536159", fontSize: 11, fontWeight: 650 }}>
+                  Select Workflow & Approver Chain
+                </label>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    type="button"
+                    style={{ fontSize: 11, color: "var(--forest)", textDecoration: "underline", cursor: "pointer", background: "none", border: "none", padding: 0 }}
+                    onClick={() => { setBatchDialogOpen(false); void openWorkflowsDialog(); }}
+                  >
+                    ⚙️ Manage Workflows
+                  </button>
+                  <button
+                    type="button"
+                    style={{ fontSize: 11, color: "var(--forest)", textDecoration: "underline", cursor: "pointer", background: "none", border: "none", padding: 0 }}
+                    onClick={() => { setBatchDialogOpen(false); void openContactsDialog(); }}
+                  >
+                    👤 Add Contact
+                  </button>
+                </div>
+              </div>
+              <select
+                value={selectedTemplateId}
+                onChange={(e) => {
+                  setSelectedTemplateId(e.target.value);
+                  const found = workflows.find((w) => w.id === e.target.value);
+                  if (found) setLiveWorkflow(found);
+                }}
+                style={{ width: "100%", height: 39, padding: "0 10px", border: "1px solid #dce4de", borderRadius: 4, background: "#fff", fontSize: 12, fontWeight: 500 }}
+              >
+                {workflows.map((wf) => {
+                  const approverContact = contacts.find((c) => c.id === wf.stages?.[0]?.contact?.id) ?? wf.stages?.[0]?.contact;
+                  return (
+                    <option key={wf.id} value={wf.id}>
+                      {wf.name} ({wf.stages?.length ?? 1} stage{(wf.stages?.length ?? 1) > 1 ? "s" : ""}) → 1st: {approverContact?.name ?? "Approver"} ({approverContact?.email ?? "Email"})
+                    </option>
+                  );
+                })}
+              </select>
+              {liveWorkflow && (
+                <div style={{ marginTop: 10, padding: "10px 12px", background: "#f8faf8", border: "1px solid #dce8db", borderRadius: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--forest)", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span>ACTIVE APPROVAL PIPELINE:</span>
+                    <span style={{ fontWeight: 500, color: "#617367" }}>{liveWorkflow.name}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                    {liveWorkflow.stages?.map((stg, sIdx) => {
+                      const freshC = contacts.find((c) => c.id === stg.contact?.id) ?? stg.contact;
+                      const freshBackup = contacts.find((c) => c.id === stg.backupContact?.id) ?? stg.backupContact;
+                      return (
+                        <div key={stg.id || sIdx} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <span className="stage-chip" style={{ background: sIdx === 0 ? "#e7f4eb" : "#f1f3f1", borderColor: sIdx === 0 ? "var(--forest)" : "#d5ded7" }}>
+                            <strong>#{stg.order}</strong> {freshC?.name || "Approver"}
+                            {freshBackup && <small style={{ color: "var(--muted)" }}> (Backup: {freshBackup.name})</small>}
+                            <small style={{ color: "var(--green)" }}> {stg.reminderIntervalHours ?? 24}h</small>
+                          </span>
+                          {sIdx < (liveWorkflow.stages?.length ?? 0) - 1 && <span style={{ color: "var(--muted)", fontWeight: 700 }}>→</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {(() => {
+                    const stage1 = liveWorkflow.stages?.[0];
+                    const primaryContact = contacts.find((c) => c.id === stage1?.contact?.id) ?? stage1?.contact;
+                    return (
+                      <div style={{ fontSize: 12, color: "#324838", background: "#ebf6ee", padding: "6px 10px", borderRadius: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                        <span>📧</span>
+                        <span>Magic link notification will be sent to: <strong>{primaryContact?.name ?? "Approver"} ({primaryContact?.email ?? "Email"})</strong></span>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
             {batchBills.map((bill, index) => (
               <div className="batch-bill-row" key={index}>
                 <label>Bill number<input required value={bill.billNumber} onChange={(event) => setBatchBills((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, billNumber: event.target.value } : item))} placeholder="INV-2026-001" /></label>
@@ -1106,7 +1822,25 @@ export default function Home() {
           <div className="contacts-list">
             {contacts.map((contact) => (
               <div className="contact-row" key={contact.id}>
-                <strong>{contact.name}</strong>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, flexWrap: "wrap", gap: 6 }}>
+                  <strong>{contact.name}</strong>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    style={{ fontSize: 11, padding: "2px 10px", height: 26, background: "#f0f7f2", borderColor: "#cce5d4", color: "var(--forest)", fontWeight: 600 }}
+                    onClick={() => {
+                      setContactsDialogOpen(false);
+                      setNewWorkflowStages([
+                        { contactId: contact.id, backupContactId: "", reminderIntervalHours: 24, maxReminders: 3 },
+                      ]);
+                      setNewWorkflowName(`${contact.name.split(" ")[0]}'s Approval Flow`);
+                      setWorkflowsDialogOpen(true);
+                    }}
+                    title={`Create a workflow template using ${contact.name}`}
+                  >
+                    ⚡ Build Workflow with {contact.name.split(" ")[0]}
+                  </button>
+                </div>
                 <label>Email<input type="email" required value={contact.email} onChange={(event) => setContacts((current) => current.map((item) => item.id === contact.id ? { ...item, email: event.target.value } : item))} /></label>
                 <div className="contact-edit-footer">
                   <label>Role<input value={contact.role} onChange={(event) => setContacts((current) => current.map((item) => item.id === contact.id ? { ...item, role: event.target.value } : item))} /></label>
@@ -1170,6 +1904,463 @@ export default function Home() {
           </form>
         </section>
       </div>}
+
+      {workflowsDialogOpen && (
+        <div className="dialog-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !isSavingWorkflow) setWorkflowsDialogOpen(false); }}>
+          <section className="bill-dialog workflows-dialog" role="dialog" aria-modal="true" aria-labelledby="wf-dialog-title">
+            <div className="dialog-heading">
+              <div>
+                <p className="eyebrow">ADMINISTRATION</p>
+                <h2 id="wf-dialog-title">Workflow Templates</h2>
+              </div>
+              <button className="dialog-close" type="button" disabled={isSavingWorkflow} onClick={() => setWorkflowsDialogOpen(false)} aria-label="Close dialog">×</button>
+            </div>
+            <p className="dialog-description">Configure sequential multi-stage approval templates with primary approvers, backup contacts, and reminder rules.</p>
+
+            <div className="workflow-templates-list">
+              {workflows.map((wf) => (
+                <div className="workflow-template-card" key={wf.id}>
+                  <div className="workflow-template-head">
+                    <div>
+                      <strong>{wf.name}</strong>
+                      <span style={{ marginLeft: 8, fontSize: 11, color: "var(--muted)" }}>({wf.stages.length} stage{wf.stages.length === 1 ? "" : "s"})</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <button
+                        className="primary-button"
+                        type="button"
+                        style={{ fontSize: 11, padding: "3px 10px", height: 28 }}
+                        onClick={() => {
+                          setSelectedTemplateId(wf.id);
+                          setLiveWorkflow(wf);
+                          setWorkflowsDialogOpen(false);
+                          setBatchDialogOpen(true);
+                        }}
+                        title="Create a new approval batch using this workflow"
+                      >
+                        ＋ Create Batch with this Workflow
+                      </button>
+                      {(!wf._count || wf._count.batches === 0) && (
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          style={{ fontSize: 11, padding: "3px 8px", height: 28, color: "var(--red)", borderColor: "#eec8c5" }}
+                          onClick={() => void deleteWorkflow(wf.id)}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="workflow-stages-preview">
+                    {wf.stages.map((stg, sIndex) => (
+                      <span key={stg.id || sIndex} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <span className="stage-chip">
+                          <strong>#{stg.order}</strong> {stg.contact?.name || "Approver"}
+                          {stg.backupContact && <small style={{ color: "var(--muted)" }}>({stg.backupContact.name})</small>}
+                          <small style={{ color: "var(--green)" }}>{stg.reminderIntervalHours ?? 24}h</small>
+                        </span>
+                        {sIndex < wf.stages.length - 1 && <span className="stage-chip-arrow">→</span>}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {workflows.length === 0 && <p className="empty-state">No workflow templates found.</p>}
+            </div>
+
+            <form className="contact-create-form" onSubmit={createWorkflow}>
+              <p className="section-kicker">CREATE NEW WORKFLOW TEMPLATE</p>
+              <label style={{ display: "grid", gap: 5, fontSize: 11, fontWeight: 600, color: "#536159", marginBottom: 12 }}>
+                Template Name
+                <input
+                  required
+                  placeholder="e.g. Standard 2-Stage Approval, Fast-Track Flow"
+                  value={newWorkflowName}
+                  onChange={(e) => setNewWorkflowName(e.target.value)}
+                  style={{ height: 38, padding: "0 10px", border: "1px solid #dce4de", borderRadius: 4 }}
+                />
+              </label>
+
+              <div className="section-kicker" style={{ marginTop: 14 }}>SEQUENTIAL APPROVAL STAGES</div>
+              <div className="stage-builder-list">
+                {newWorkflowStages.map((stage, idx) => (
+                  <div className="stage-builder-row" key={idx}>
+                    <div className="stage-num-badge">{idx + 1}</div>
+                    <label>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                        <span>Primary Approver</span>
+                        <button
+                          type="button"
+                          style={{ fontSize: 11, color: "var(--forest)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}
+                          onClick={() => {
+                            setWorkflowsDialogOpen(false);
+                            void openContactsDialog();
+                          }}
+                        >
+                          ＋ New Contact
+                        </button>
+                      </div>
+                      <select
+                        required
+                        value={stage.contactId}
+                        onChange={(e) =>
+                          setNewWorkflowStages((curr) =>
+                            curr.map((item, itemIdx) => (itemIdx === idx ? { ...item, contactId: e.target.value } : item)),
+                          )
+                        }
+                      >
+                        <option value="">Select contact...</option>
+                        {contacts.filter((c) => c.isActive).map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.email})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Backup Approver (Optional)
+                      <select
+                        value={stage.backupContactId}
+                        onChange={(e) =>
+                          setNewWorkflowStages((curr) =>
+                            curr.map((item, itemIdx) => (itemIdx === idx ? { ...item, backupContactId: e.target.value } : item)),
+                          )
+                        }
+                      >
+                        <option value="">None</option>
+                        {contacts
+                          .filter((c) => c.isActive && c.id !== stage.contactId)
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name} ({c.email})
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                    <label>
+                      Interval (Hours)
+                      <input
+                        type="number"
+                        min="1"
+                        max="720"
+                        value={stage.reminderIntervalHours}
+                        onChange={(e) =>
+                          setNewWorkflowStages((curr) =>
+                            curr.map((item, itemIdx) => (itemIdx === idx ? { ...item, reminderIntervalHours: Number(e.target.value) } : item)),
+                          )
+                        }
+                      />
+                    </label>
+                    <label>
+                      Max Tries
+                      <input
+                        type="number"
+                        min="0"
+                        max="20"
+                        value={stage.maxReminders}
+                        onChange={(e) =>
+                          setNewWorkflowStages((curr) =>
+                            curr.map((item, itemIdx) => (itemIdx === idx ? { ...item, maxReminders: Number(e.target.value) } : item)),
+                          )
+                        }
+                      />
+                    </label>
+                    <button
+                      className="remove-bill-button"
+                      type="button"
+                      disabled={newWorkflowStages.length === 1}
+                      onClick={() => setNewWorkflowStages((curr) => curr.filter((_, itemIdx) => itemIdx !== idx))}
+                      aria-label="Remove stage"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                className="text-button"
+                type="button"
+                onClick={() =>
+                  setNewWorkflowStages((curr) => [
+                    ...curr,
+                    { contactId: "", backupContactId: "", reminderIntervalHours: 24, maxReminders: 3 },
+                  ])
+                }
+                style={{ marginBottom: 16 }}
+              >
+                ＋ Add next approval stage
+              </button>
+
+              <div className="dialog-actions">
+                <button className="secondary-button" type="button" disabled={isSavingWorkflow} onClick={() => setWorkflowsDialogOpen(false)}>Cancel</button>
+                <button className="primary-button" type="submit" disabled={isSavingWorkflow}>{isSavingWorkflow ? "Saving..." : "Save Template"}</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {batchHistoryDialogOpen && (
+        <div className="dialog-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setBatchHistoryDialogOpen(false); }}>
+          <section className="bill-dialog batch-history-dialog" role="dialog" aria-modal="true" aria-labelledby="history-dialog-title">
+            <div className="dialog-heading">
+              <div>
+                <p className="eyebrow">AUDIT TRAIL & LIFECYCLE</p>
+                <h2 id="history-dialog-title">Batch {selectedBatchHistory?.id.slice(0, 8)} Details</h2>
+              </div>
+              <button className="dialog-close" type="button" onClick={() => setBatchHistoryDialogOpen(false)} aria-label="Close dialog">×</button>
+            </div>
+
+            {isLoadingBatchHistory ? (
+              <p className="approval-loading">Loading batch audit records and history...</p>
+            ) : selectedBatchHistory ? (
+              <>
+                <div className="history-overview-grid">
+                  <div className="history-overview-box">
+                    <small>Status</small>
+                    <strong>
+                      <span className={`status-pill status-${selectedBatchHistory.status?.toLowerCase().replace(/_/g, "-") ?? "in-progress"}`}>
+                        <i />
+                        {selectedBatchHistory.status}
+                      </span>
+                    </strong>
+                  </div>
+                  <div className="history-overview-box">
+                    <small>Template</small>
+                    <strong>{selectedBatchHistory.template?.name || "Standard Workflow"}</strong>
+                  </div>
+                  <div className="history-overview-box">
+                    <small>Bills Total</small>
+                    <strong>
+                      {formatCurrency(
+                        (selectedBatchHistory.bills ?? []).reduce((sum, b) => sum + Number(b.amount ?? 0), 0),
+                      )}
+                    </strong>
+                  </div>
+                  <div className="history-overview-box">
+                    <small>Created</small>
+                    <strong>
+                      {selectedBatchHistory.createdAt
+                        ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(new Date(selectedBatchHistory.createdAt))
+                        : "Recent"}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="history-tabs">
+                  <button className={`history-tab ${historyTab === "stages" ? "active" : ""}`} onClick={() => setHistoryTab("stages")}>
+                    Stages ({selectedBatchHistory.stepInstances?.length ?? 0})
+                  </button>
+                  <button className={`history-tab ${historyTab === "bills" ? "active" : ""}`} onClick={() => setHistoryTab("bills")}>
+                    Bills ({selectedBatchHistory.bills?.length ?? 0})
+                  </button>
+                  <button className={`history-tab ${historyTab === "audit" ? "active" : ""}`} onClick={() => setHistoryTab("audit")}>
+                    Audit Trail ({selectedBatchHistory.auditLogs?.length ?? 0})
+                  </button>
+                  <button className={`history-tab ${historyTab === "notifications" ? "active" : ""}`} onClick={() => setHistoryTab("notifications")}>
+                    Email Log ({selectedBatchHistory.notifications?.length ?? 0})
+                  </button>
+                </div>
+
+                {historyTab === "stages" && (
+                  <div className="timeline-stages">
+                    {(selectedBatchHistory.stepInstances ?? []).map((step) => {
+                      const isDone = step.status === "COMPLETED";
+                      const isAlerted = step.status === "ALERTED";
+                      const isReturned = step.status === "RETURNED";
+                      return (
+                        <div
+                          key={step.id}
+                          className={`timeline-stage-card ${isDone ? "completed" : isAlerted ? "alerted" : isReturned ? "returned" : ""}`}
+                        >
+                          <div className="timeline-stage-header">
+                            <div>
+                              <strong>Stage {step.stage?.order}: {step.stage?.contact?.name ?? "Approver"}</strong>
+                              <span style={{ fontSize: 11, color: "var(--muted)", marginLeft: 8 }}>
+                                ({step.stage?.contact?.email})
+                              </span>
+                            </div>
+                            <span className={`status-pill status-${step.status?.toLowerCase() ?? "pending"}`}>
+                              <i />
+                              {step.status}
+                            </span>
+                          </div>
+                          {step.stage?.backupContact && (
+                            <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                              Backup Approver: {step.stage.backupContact.name} ({step.stage.backupContact.email})
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {historyTab === "bills" && (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Bill Number</th>
+                          <th>Due Date</th>
+                          <th>Status</th>
+                          <th className="amount-heading">Amount / Balance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(selectedBatchHistory.bills ?? []).map((bill) => (
+                          <tr key={bill.id ?? bill.billNumber}>
+                            <td><strong>{bill.billNumber}</strong></td>
+                            <td>{bill.dueDate ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(new Date(bill.dueDate)) : "—"}</td>
+                            <td><span className={`status-pill status-${bill.status?.toLowerCase() ?? "pending"}`}><i />{bill.status}</span></td>
+                            <td className="amount-cell">
+                              {formatCurrency(Number(bill.amount ?? 0))}
+                              <small>{formatCurrency(Number(bill.balanceDue ?? 0))} remaining</small>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {historyTab === "audit" && (
+                  <div className="audit-list">
+                    {(selectedBatchHistory.auditLogs ?? []).map((log) => (
+                      <div className="audit-entry" key={log.id}>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span className="status-pill status-ready-for-payment">{log.action}</span>
+                            <span className="audit-entry-actor">{log.actor}</span>
+                          </div>
+                          {log.detail && (
+                            <div className="audit-entry-detail">
+                              {typeof log.detail === "object" ? JSON.stringify(log.detail) : String(log.detail)}
+                            </div>
+                          )}
+                        </div>
+                        <div className="audit-entry-time">
+                          {new Intl.DateTimeFormat("en-IN", {
+                            dateStyle: "short",
+                            timeStyle: "medium",
+                          }).format(new Date(log.createdAt))}
+                        </div>
+                      </div>
+                    ))}
+                    {(selectedBatchHistory.auditLogs?.length ?? 0) === 0 && (
+                      <p className="empty-state">No audit logs recorded for this batch yet.</p>
+                    )}
+                  </div>
+                )}
+
+                {historyTab === "notifications" && (
+                  <div className="notif-list">
+                    {(selectedBatchHistory.notifications ?? []).map((notif) => (
+                      <div className="notif-item" key={notif.id}>
+                        <div>
+                          <strong>{notif.recipient}</strong>
+                          <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>
+                            {notif.sentAt ? `Sent at ${new Intl.DateTimeFormat("en-IN", { dateStyle: "short", timeStyle: "medium" }).format(new Date(notif.sentAt))}` : "Pending delivery"}
+                            {notif.error && <span style={{ color: "var(--red)", marginLeft: 6 }}>Error: {notif.error}</span>}
+                          </div>
+                        </div>
+                        <span className={`status-pill status-${notif.status.toLowerCase()}`}>
+                          <i />
+                          {notif.status}
+                        </span>
+                      </div>
+                    ))}
+                    {(selectedBatchHistory.notifications?.length ?? 0) === 0 && (
+                      <p className="empty-state">No email notifications recorded for this batch yet.</p>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="approval-error">Batch details could not be found.</p>
+            )}
+
+            <div className="dialog-actions" style={{ marginTop: 20 }}>
+              <button className="primary-button" type="button" onClick={() => setBatchHistoryDialogOpen(false)}>Close</button>
+            </div>
+          </section>
+        </div>
+      )}
+          {reassignModalOpen && reassignTarget && (
+        <div className="dialog-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setReassignModalOpen(false); }}>
+          <section className="bill-dialog" role="dialog" aria-modal="true" aria-labelledby="reassign-dialog-title" style={{ maxWidth: 480 }}>
+            <div className="dialog-heading">
+              <div>
+                <p className="eyebrow">ADMIN ACTION · STAGE REASSIGNMENT</p>
+                <h2 id="reassign-dialog-title">Reassign Workflow Step</h2>
+              </div>
+              <button className="dialog-close" type="button" onClick={() => setReassignModalOpen(false)} aria-label="Close dialog">×</button>
+            </div>
+            <p style={{ fontSize: "0.88rem", color: "#64748b", margin: "0 0 16px 0" }}>
+              Reassign active step for Batch <strong>{reassignTarget.batchId.slice(0, 8)}</strong> from {reassignTarget.currentContactName || "current approver"} to another active organization contact.
+            </p>
+
+            <form onSubmit={(e) => { e.preventDefault(); void submitReassignStep(); }}>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "#334155" }}>
+                    Select Replacement Approver <span style={{ color: "#e11d48" }}>*</span>
+                  </label>
+                  <button
+                    type="button"
+                    className="text-button"
+                    style={{ fontSize: "0.8rem" }}
+                    onClick={() => {
+                      setReassignModalOpen(false);
+                      setContactsDialogOpen(true);
+                    }}
+                  >
+                    ＋ New Contact
+                  </button>
+                </div>
+                <select
+                  value={reassignNewContactId}
+                  onChange={(e) => setReassignNewContactId(e.target.value)}
+                  required
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: "0.95rem" }}
+                >
+                  <option value="">-- Choose active contact --</option>
+                  {contacts.filter((c) => c.isActive).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} · {c.email} ({c.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "#334155", marginBottom: 6 }}>
+                  Reason Note (Optional, audit logged)
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="e.g. Primary approver on leave; reassigned per email request"
+                  value={reassignReason}
+                  onChange={(e) => setReassignReason(e.target.value)}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #cbd5e1" }}
+                />
+              </div>
+
+              <div className="dialog-actions">
+                <button className="secondary-button" type="button" disabled={isSubmittingReassign} onClick={() => setReassignModalOpen(false)}>
+                  Cancel
+                </button>
+                <button className="primary-button" type="submit" disabled={isSubmittingReassign || !reassignNewContactId}>
+                  {isSubmittingReassign ? "Reassigning..." : "Confirm Reassignment"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
     </main>
   );
 }

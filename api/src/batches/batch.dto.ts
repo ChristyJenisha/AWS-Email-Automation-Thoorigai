@@ -41,3 +41,18 @@ export class CreateBatchDto {
   @Type(() => CreateBillInputDto)
   bills!: CreateBillInputDto[];
 }
+export class ConfirmOnBehalfDto {
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class ReassignStepDto {
+  @IsString()
+  @IsNotEmpty()
+  newContactId!: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
