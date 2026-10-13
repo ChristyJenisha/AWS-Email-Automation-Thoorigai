@@ -46,6 +46,58 @@ export class BatchesService {
     return batch;
   }
 
+  async getHistory(id: string) {
+    const batch = await this.prisma.batch.findUnique({
+      where: { id },
+      include: {
+        organization: { select: { id: true, name: true } },
+        template: { select: { id: true, name: true } },
+        bills: { orderBy: { createdAt: 'asc' as const } },
+        stepInstances: {
+          orderBy: { stage: { order: 'asc' as const } },
+          include: {
+            stage: {
+              include: {
+                contact: { select: { id: true, name: true, email: true, role: true } },
+                backupContact: { select: { id: true, name: true, email: true, role: true } },
+              },
+            },
+          },
+        },
+        notifications: {
+          orderBy: { createdAt: 'desc' as const },
+        },
+        payments: {
+          include: {
+            allocations: {
+              include: {
+                bill: { select: { id: true, billNumber: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' as const },
+        },
+      },
+    });
+    if (!batch) throw new NotFoundException('Batch not found');
+
+    const stepIds = batch.stepInstances.map((s) => s.id);
+    const auditLogs = await this.prisma.auditLog.findMany({
+      where: {
+        OR: [
+          { entityType: 'batch', entityId: id },
+          { entityType: 'step_instance', entityId: { in: stepIds } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      ...batch,
+      auditLogs,
+    };
+  }
+
   async create(input: CreateBatchDto) {
     const billNumbers = input.bills.map((bill) => bill.billNumber.trim());
     if (billNumbers.some((number) => !number)) {
@@ -121,5 +173,36 @@ export class BatchesService {
 
     await this.remindersService.sendInitialApproval(batch.id);
     return batch;
+  }
+async delete(id: string) {
+    const batch = await this.prisma.batch.findUnique({
+      where: { id },
+      include: {
+        stepInstances: { select: { id: true } },
+        payments: { select: { id: true } },
+      },
+    });
+    if (!batch) throw new NotFoundException('Batch not found');
+
+    await this.prisma.$transaction(async (tx) => {
+      const paymentIds = batch.payments.map((p) => p.id);
+      if (paymentIds.length > 0) {
+        await tx.paymentAllocation.deleteMany({
+          where: { paymentId: { in: paymentIds } },
+        });
+      }
+      const stepIds = batch.stepInstances.map((s) => s.id);
+      await tx.auditLog.deleteMany({
+        where: {
+          OR: [
+            { entityType: 'batch', entityId: id },
+            { entityType: 'step_instance', entityId: { in: stepIds } },
+          ],
+        },
+      });
+      await tx.batch.delete({ where: { id } });
+    });
+
+    return { message: 'Batch and its bills deleted successfully', id };
   }
 }

@@ -12,6 +12,10 @@ describe('WorkflowsController', () => {
   const workflowTransitionsService = {
     complete: vi.fn(),
     returnToPrevious: vi.fn(),
+    requestReassignment: vi.fn(),
+    verifyApprovalToken: vi.fn(),
+    inspectApprovalToken: vi.fn(),
+    getApprovalLink: vi.fn(),
   };
 
   beforeEach(async () => {
@@ -68,7 +72,12 @@ describe('WorkflowsController', () => {
     const approvalsController = new ApprovalsController(workflowTransitionsService as any);
 
     await expect(approvalsController.complete({ token: 'signed-token' })).resolves.toEqual({ status: 'COMPLETED' });
-    expect(workflowTransitionsService.complete).toHaveBeenCalledWith('step-1', 'approver-1', 'demo-org');
+    expect(workflowTransitionsService.complete).toHaveBeenCalledWith(
+      'step-1',
+      'approver-1',
+      'demo-org',
+      expect.objectContaining({ source: 'magic_link' }),
+    );
   });
 
   it('returns the token-scoped step with the approver comment', async () => {
@@ -88,6 +97,27 @@ describe('WorkflowsController', () => {
       'approver-1',
       'Correct the total',
       'demo-org',
+      expect.objectContaining({ source: 'magic_link' }),
+    );
+  });
+
+  it('submits a reassignment request for a valid approval token', async () => {
+    workflowTransitionsService.verifyApprovalToken = vi.fn().mockReturnValue({
+      stepInstanceId: 'step-1',
+      actorId: 'approver-1',
+      organizationId: 'demo-org',
+    });
+    workflowTransitionsService.requestReassignment.mockResolvedValue({ status: 'reassignment_requested' });
+    const approvalsController = new ApprovalsController(workflowTransitionsService as any);
+
+    await expect(
+      approvalsController.reassign({ token: 'signed-token', reason: 'On leave', requestedContactEmail: 'backup@example.test' }),
+    ).resolves.toEqual({ status: 'reassignment_requested' });
+    expect(workflowTransitionsService.requestReassignment).toHaveBeenCalledWith(
+      'signed-token',
+      'On leave',
+      'backup@example.test',
+      expect.objectContaining({ source: 'magic_link' }),
     );
   });
 });

@@ -51,12 +51,86 @@ Batch routes are `GET /batches?organizationId=demo-org`, `GET /batches/:id`, and
 
 The internal workflow transition service supports complete and return-with-comment actions, advances or reactivates stages after a return, schedules the next reminder, and marks the final batch ready for payment. The authenticated guard and organization checks are in place for the workflow access paths that matter for real use.
 
+Public approval links request a six-digit email OTP before enabling approve/return actions. Codes expire based on `OTP_TTL_SECONDS` (capped at 30 minutes), allow five attempts, and are stored as HMAC hashes. When local email simulation is active, the code is shown in the local approver page for development; configured email providers receive it by email. After starting the local stack, apply new database migrations with `docker compose exec api npm run db:deploy --workspace=api` before using newly added fields.
+
 Payment routes support payment creation, batch payment history, on-account allocation, and payment-proof upload/download. Payment recording is limited to batches in `READY_FOR_PAYMENT`. The request includes a `batchId`, settlement `amount`, and one or more bill allocations. Cash allocations plus typed deductions must equal the settlement total. Bill balances and statuses, payment allocations, final batch completion, and audit history are updated transactionally. In local-only mode, proof files (PDF/JPG/PNG, up to 10 MB) are stored under the ignored `api/local-storage/payment-proofs/` directory; when `S3_BUCKET` is configured, the API stores them in S3.
 
 The API runs an in-process reminder sweep every minute. The manual `POST /reminders/run` route remains available for authenticated testing. Conditional database claims prevent the scheduler and manual trigger from processing the same due reminder concurrently; failed primary deliveries are retried after five minutes. Once a stage reaches its reminder limit, the system attempts escalation email to its backup approver and active organization contacts with an admin role. Quiet hours and production SES verification remain pending.
 
 The app is now in the working MVP state for local operations; production hardening remains limited to AWS role configuration, real user identity, and deployment environment settings.
 
-## Deployment and rollback
+## Production deployment and rollback (Phase 10)
 
-Production deployment, manual rollback, and GitHub Actions steps are intentionally pending Phase 10. Do not deploy this development Compose configuration to EC2.
+The production configuration uses `docker-compose.prod.yml` running behind an Nginx reverse proxy with automated SSL (Certbot), container health monitoring, and CI/CD automation.
+
+### 1. Initial EC2 server setup
+
+Run the server initialization script on your target EC2 instance (Ubuntu 24.04 or Amazon Linux 2023):
+
+```bash
+chmod +x infra/scripts/setup-ec2.sh
+./infra/scripts/setup-ec2.sh
+```
+
+Log out and back in, clone the repository, and prepare your production `.env` (or load from AWS SSM Parameter Store).
+
+### 2. Deploy with Docker Compose
+
+To deploy production containers:
+
+```bash
+# Apply migrations
+docker compose -f docker-compose.prod.yml run --rm api npm run db:deploy --workspace=api
+
+# Launch API, Web, Nginx reverse proxy, and Certbot
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Verify service health:
+
+```bash
+curl http://localhost/health
+```
+
+The endpoint returns `{ "status": "ok", "database": "connected", "uptime": ... }`.
+
+### 3. Configure TLS / SSL with Let's Encrypt
+
+Obtain a free SSL certificate for your domain:
+
+```bash
+chmod +x infra/scripts/init-letsencrypt.sh
+./infra/scripts/init-letsencrypt.sh your-domain.com admin@your-domain.com
+```
+
+Then activate HTTPS in Nginx:
+
+```bash
+sed 's/YOUR_DOMAIN_NAME/your-domain.com/g' infra/nginx/conf.d/ssl.conf.template > infra/nginx/conf.d/ssl.conf
+docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
+```
+
+### 4. Automated CI/CD (GitHub Actions)
+
+A GitHub Actions workflow is configured in `.github/workflows/deploy.yml`. On every push to `master` or `main`:
+1. Runs lint checks (`npm run lint`),
+2. Generates Prisma client,
+3. Executes unit and integration test suite (`npm test --workspace=api`),
+4. Validates production builds (`npm run build`),
+5. Deploys via SSH to EC2, applies database migrations, restarts containers, and polls the `/health` endpoint.
+
+Required GitHub Secrets for deployment:
+- `EC2_HOST`: Public Elastic IP or domain name of your EC2 instance.
+- `EC2_USER`: SSH username (`ubuntu` or `ec2-user`).
+- `EC2_SSH_KEY`: Private SSH key for EC2 authentication.
+
+### 5. Automated and manual rollback
+
+If a deployment fails or health checks do not pass:
+
+```bash
+chmod +x infra/scripts/rollback.sh
+./infra/scripts/rollback.sh
+```
+
+This reverts the repository to the last recorded good commit (`.last_good_commit`), rebuilds/restarts containers, and verifies recovery.

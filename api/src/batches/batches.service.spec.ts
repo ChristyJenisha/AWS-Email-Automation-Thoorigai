@@ -10,7 +10,7 @@ describe('BatchesService', () => {
     organization: { findUnique: ReturnType<typeof vi.fn> };
     workflowTemplate: { findFirst: ReturnType<typeof vi.fn> };
     batch: { findMany: ReturnType<typeof vi.fn>; findUnique: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
-    auditLog: { create: ReturnType<typeof vi.fn> };
+    auditLog: { create: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
     $transaction: ReturnType<typeof vi.fn>;
   };
   const remindersService = { sendInitialApproval: vi.fn().mockResolvedValue({ status: 'sent' }) };
@@ -20,7 +20,7 @@ describe('BatchesService', () => {
       organization: { findUnique: vi.fn() },
       workflowTemplate: { findFirst: vi.fn() },
       batch: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn() },
-      auditLog: { create: vi.fn() },
+      auditLog: { create: vi.fn(), findMany: vi.fn() },
       $transaction: vi.fn((callback) => callback(prisma)),
     };
     remindersService.sendInitialApproval.mockClear();
@@ -98,5 +98,39 @@ describe('BatchesService', () => {
       service.create({ organizationId: 'org-1', templateId: 'workflow-1', bills: [{ billNumber: 'INV-1', amount: 100 }] }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.batch.create).not.toHaveBeenCalled();
+  });
+  it('retrieves full batch history with notifications, payments, and audit logs', async () => {
+    prisma.batch.findUnique.mockResolvedValue({
+      id: 'batch-1',
+      organizationId: 'org-1',
+      stepInstances: [{ id: 'step-1' }, { id: 'step-2' }],
+      notifications: [{ id: 'notif-1', recipient: 'approver@example.test', status: 'SENT' }],
+      payments: [{ id: 'pmt-1', amount: 1200 }],
+    });
+    prisma.auditLog.findMany.mockResolvedValue([
+      { id: 'audit-1', entityType: 'batch', entityId: 'batch-1', action: 'created' },
+    ]);
+
+    const history = await service.getHistory('batch-1');
+
+    expect(history.id).toBe('batch-1');
+    expect(history.notifications).toHaveLength(1);
+    expect(history.payments).toHaveLength(1);
+    expect(history.auditLogs).toHaveLength(1);
+    expect(prisma.auditLog.findMany).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          { entityType: 'batch', entityId: 'batch-1' },
+          { entityType: 'step_instance', entityId: { in: ['step-1', 'step-2'] } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  });
+
+  it('throws NotFoundException if batch does not exist in getHistory', async () => {
+    prisma.batch.findUnique.mockResolvedValue(null);
+
+    await expect(service.getHistory('unknown-batch')).rejects.toBeInstanceOf(NotFoundException);
   });
 });

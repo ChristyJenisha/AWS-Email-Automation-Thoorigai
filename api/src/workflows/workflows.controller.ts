@@ -61,6 +61,13 @@ export class WorkflowsController {
     return this.workflowsService.delete(id);
   }
 
+  @Get('steps/:stepInstanceId/approval-link')
+  async getApprovalLink(@Req() request: any, @Param('stepInstanceId') stepInstanceId: string) {
+    const link = await this.workflowTransitionsService.getApprovalLink(stepInstanceId);
+    this.authService.assertOrganizationAccess(request?.user, link.organizationId);
+    return { token: link.token, url: link.url, approverEmail: link.approverEmail };
+  }
+
   @Post('steps/:stepInstanceId/complete')
   completeStep(@Req() request: any, @Param('stepInstanceId') stepInstanceId: string, @Body() input: WorkflowActionDto) {
     const actualRequest = typeof request === 'string' || request === undefined ? { user: undefined } : request;
