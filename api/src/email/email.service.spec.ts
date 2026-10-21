@@ -7,6 +7,11 @@ describe('EmailService', () => {
   beforeEach(() => {
     delete process.env.AWS_SES_FROM;
     delete process.env.AWS_REGION;
+    delete process.env.SMTP_HOST;
+    delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASS;
+    delete process.env.GMAIL_USER;
+    delete process.env.GMAIL_APP_PASSWORD;
     service = new EmailService();
   });
 

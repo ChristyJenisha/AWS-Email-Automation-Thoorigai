@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { NotificationStatus, StepStatus } from '@prisma/client';
-import { EmailService } from '../email/email.service.js';
+import { EmailService, buildApprovalEmailHtml } from '../email/email.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WorkflowTransitionsService } from '../workflows/workflow-transitions.service.js';
 
@@ -20,8 +20,8 @@ export class RemindersService {
       include: {
         stage: {
           include: {
-            contact: { select: { id: true, email: true } },
-            backupContact: { select: { id: true, email: true } },
+            contact: { select: { id: true, email: true, name: true } },
+            backupContact: { select: { id: true, email: true, name: true } },
           },
         },
         batch: { select: { organizationId: true } },
@@ -51,10 +51,35 @@ export class RemindersService {
       const token = this.workflowTransitions.generateApprovalToken(step.id, approver.id, step.batch.organizationId);
       const approvalUrl = new URL('/approve', process.env.APPROVAL_APP_URL ?? 'http://localhost:3000');
       approvalUrl.searchParams.set('token', token); console.log('[APPROVAL_URL_DEBUG] hasToken=', approvalUrl.searchParams.has('token'), 'url=', approvalUrl.origin + approvalUrl.pathname + '?token-present');
+
+      let initialOtpCode: string | undefined;
+      if (typeof (this.workflowTransitions as any).issueApprovalOtp === 'function') {
+        try {
+          const otpResult = await (this.workflowTransitions as any).issueApprovalOtp(step.id, 30);
+          initialOtpCode = otpResult?.code;
+        } catch (otpErr) {
+          console.warn('[INITIAL_OTP_ISSUE_WARN]', otpErr);
+        }
+      }
+
+      const html = buildApprovalEmailHtml({
+        headline: 'Action Required: Stage 1 Workflow Approval',
+        recipientName: approver.name,
+        leadMessage: 'A new bill collection batch has been initialized and is ready for your Stage 1 verification.',
+        batchId: step.batchId,
+        stageOrder: 1,
+        otpCode: initialOtpCode,
+        otpExpiresMinutes: 30,
+        ctaUrl: approvalUrl.toString(),
+        ctaText: 'Review & Approve Batch →',
+        subNotice: 'Click above to open the batch details. Then manually enter your 6-digit verification code to confirm approval.',
+      });
+
       await this.emailService.sendReminderEmail({
         to: approver.email,
         subject: `Approval required for batch ${step.batchId}`,
-        body: `A bill collection batch is ready for your review. Approve or return it here: ${approvalUrl.toString()}`,
+        body: `A bill collection batch is ready for your review.${initialOtpCode ? ` Verification Code: ${initialOtpCode}.` : ''} Approve or return it here: ${approvalUrl.toString()}`,
+        html,
       });
       await this.prisma.notification.update({
         where: { id: notification.id },

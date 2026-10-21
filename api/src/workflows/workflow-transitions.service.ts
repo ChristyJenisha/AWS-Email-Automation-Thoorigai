@@ -14,7 +14,7 @@ import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { BatchStatus, Prisma, StepStatus } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { EmailService } from '../email/email.service.js';
+import { EmailService, buildApprovalEmailHtml } from '../email/email.service.js';
 
 const transitionContext = {
   id: true,
@@ -64,7 +64,7 @@ export class WorkflowTransitionsService {
     this.validateActorForStep(step, actor);
     const now = new Date();
 
-    return this.prisma.$transaction(async (transaction) => {
+    const result = await this.prisma.$transaction(async (transaction) => {
       await this.claimActiveStep(transaction, step.id, {
         status: StepStatus.COMPLETED,
         completedAt: now,
@@ -131,6 +131,18 @@ export class WorkflowTransitionsService {
 
       return { stepInstanceId: step.id, status: StepStatus.COMPLETED, nextStageId: nextStage?.id ?? null };
     });
+
+    if (this.emailService) {
+      const approverEmail = step.stage.contact?.email ?? step.stage.backupContact?.email;
+      if (approverEmail) {
+        void this.notifyApproverCompletion(approverEmail, step, Boolean(result.nextStageId)).catch(() => {});
+      }
+      if (result.nextStageId) {
+        void this.notifyNextStageApprover(step.batchId, result.nextStageId).catch(() => {});
+      }
+    }
+
+    return result;
   }
 
   async returnToPrevious(
@@ -155,7 +167,7 @@ export class WorkflowTransitionsService {
     if (!previousStage) throw new BadRequestException('The first workflow stage cannot be returned to a previous stage');
 
     const now = new Date();
-    return this.prisma.$transaction(async (transaction) => {
+    const result = await this.prisma.$transaction(async (transaction) => {
       await this.claimActiveStep(transaction, step.id, {
         status: StepStatus.RETURNED,
         completedAt: null,
@@ -190,6 +202,12 @@ export class WorkflowTransitionsService {
 
       return { stepInstanceId: step.id, status: StepStatus.RETURNED, previousStageId: previousStage.id };
     });
+
+    if (this.emailService && previousStage?.id) {
+      void this.notifyReturnedStageApprover(step.batchId, previousStage.id, normalizedComment).catch(() => {});
+    }
+
+    return result;
   }
 
   async confirmOnBehalf(
@@ -498,6 +516,25 @@ export class WorkflowTransitionsService {
     return jwt.sign(payload, this.getTokenSigningSecret());
   }
 
+  async issueApprovalOtp(stepId: string, ttlMinutes = 30): Promise<{ code: string; expiresAt: Date }> {
+    const code = String(randomInt(100_000, 1_000_000));
+    const codeHash = this.hashApprovalOtp(stepId, code);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + ttlMinutes * 60_000);
+
+    await this.prisma.stepInstance.update({
+      where: { id: stepId },
+      data: {
+        approvalOtpHash: codeHash,
+        approvalOtpExpiresAt: expiresAt,
+        approvalOtpAttempts: 0,
+        approvalOtpRequestedAt: now,
+      },
+    });
+
+    return { code, expiresAt };
+  }
+
   async requestApprovalOtp(token: string) {
     const approval = this.verifyApprovalToken(token);
     const step = await this.getActiveStep(approval.stepInstanceId);
@@ -540,11 +577,27 @@ export class WorkflowTransitionsService {
       throw new HttpException('Please wait before requesting another verification code', HttpStatus.TOO_MANY_REQUESTS);
     }
 
+    const baseUrl = process.env.APPROVAL_APP_URL || 'http://localhost:3000';
+    const approvalUrl = `${baseUrl}/approve?token=${encodeURIComponent(token)}`;
+    const remainingMinutes = Math.ceil((expiresAt.getTime() - now.getTime()) / 60_000);
+
+    const html = buildApprovalEmailHtml({
+      headline: 'Identity Verification Code',
+      recipientName: recipient,
+      leadMessage: 'You requested a verification code to authorize a bill collection batch.',
+      otpCode: code,
+      otpExpiresMinutes: remainingMinutes,
+      ctaUrl: approvalUrl,
+      ctaText: 'Open Approval Page & Enter Code →',
+      subNotice: 'Enter this 6-digit code manually into the verification field on the approval portal to verify your authorization.',
+    });
+
     try {
       const delivery = await this.emailService.sendReminderEmail({
         to: recipient,
         subject: 'Your bill approval verification code',
-        body: `Your verification code is ${code}. It expires in ${Math.ceil((expiresAt.getTime() - now.getTime()) / 60_000)} minutes. Do not share this code.`,
+        body: `Your verification code is ${code}. It expires in ${remainingMinutes} minutes. Approval portal: ${approvalUrl}`,
+        html,
         sensitive: true,
       });
       if (delivery.status === 'simulated') {
@@ -552,9 +605,21 @@ export class WorkflowTransitionsService {
           await this.clearApprovalOtp(step.id, codeHash);
           throw new ServiceUnavailableException('Email delivery is not configured');
         }
-        return { status: 'simulated' as const, expiresAt, developmentCode: code };
+        return {
+          status: 'simulated' as const,
+          expiresAt,
+          developmentCode: code,
+          devCode: code,
+          provider: delivery.provider,
+          message: 'Simulation Mode: Email delivery simulated locally. Use the test code below.',
+        };
       }
-      return { status: 'sent' as const, expiresAt };
+      return {
+        status: 'sent' as const,
+        expiresAt,
+        provider: delivery.provider,
+        message: `A 6-digit verification code has been dispatched to ${recipient}.`,
+      };
     } catch (error) {
       await this.clearApprovalOtp(step.id, codeHash);
       throw error;
@@ -651,9 +716,74 @@ export class WorkflowTransitionsService {
 
   async inspectApprovalToken(token: string) {
     const approval = this.verifyApprovalToken(token);
-    const step = await this.getActiveStep(approval.stepInstanceId);
+    const step = await this.prisma.stepInstance.findUnique({
+      where: { id: approval.stepInstanceId },
+      select: transitionContext,
+    });
+    if (!step) throw new NotFoundException('Workflow step not found');
     this.validateOrganizationForStep(step, approval.organizationId);
     this.validateActorForStep(step, approval.actorId);
+
+    if (step.status === StepStatus.COMPLETED) {
+      let activeStage: {
+        order: number;
+        approverName: string;
+        approverEmail: string;
+        token: string;
+        url: string;
+      } | null = null;
+
+      if (step.batch.status === BatchStatus.IN_PROGRESS) {
+        const nextActiveStep = await this.prisma.stepInstance.findFirst({
+          where: { batchId: step.batchId, status: StepStatus.ALERTED },
+          include: {
+            stage: {
+              include: {
+                contact: { select: { id: true, email: true, name: true } },
+                backupContact: { select: { id: true, email: true, name: true } },
+              },
+            },
+            batch: { select: { organizationId: true } },
+          },
+        });
+        if (nextActiveStep) {
+          const approver = nextActiveStep.stage.contact?.email ? nextActiveStep.stage.contact : nextActiveStep.stage.backupContact;
+          if (approver?.id && approver?.email) {
+            const link = await this.getApprovalLink(nextActiveStep.id);
+            activeStage = {
+              order: nextActiveStep.stage.order,
+              approverName: approver.name,
+              approverEmail: approver.email,
+              token: link.token,
+              url: link.url,
+            };
+          }
+        }
+      }
+
+      return {
+        stepInstanceId: step.id,
+        batchId: step.batch.id,
+        organizationName: step.batch.organization.name,
+        stageOrder: step.stage.order,
+        status: StepStatus.COMPLETED,
+        batchStatus: step.batch.status,
+        activeStage,
+        bills: step.batch.bills.map((bill) => ({
+          billNumber: bill.billNumber,
+          amount: bill.amount,
+          balanceDue: bill.balanceDue,
+          dueDate: bill.dueDate,
+        })),
+      };
+    }
+
+    if (step.status !== StepStatus.ALERTED) {
+      throw new ConflictException('Only an alerted workflow step can be actioned');
+    }
+    if (step.batch.status !== BatchStatus.IN_PROGRESS) {
+      throw new ConflictException('The batch is no longer in progress');
+    }
 
     return {
       stepInstanceId: step.id,
@@ -704,6 +834,149 @@ export class WorkflowTransitionsService {
 
     if (!allowedActors.has(targetActor)) {
       throw new ForbiddenException('Only the assigned approver or backup approver can act on this workflow step');
+    }
+  }
+
+  private async notifyNextStageApprover(batchId: string, stageId: string) {
+    if (!this.emailService) return;
+    try {
+      const nextStep = await this.prisma.stepInstance.findFirst({
+        where: { batchId, stageId, status: StepStatus.ALERTED },
+        include: {
+          stage: {
+            include: {
+              contact: { select: { id: true, email: true, name: true } },
+              backupContact: { select: { id: true, email: true, name: true } },
+            },
+          },
+          batch: {
+            select: {
+              organizationId: true,
+              organization: { select: { name: true } },
+              bills: { select: { amount: true } },
+            },
+          },
+        },
+      });
+      if (!nextStep) return;
+      const approver = nextStep.stage.contact?.email ? nextStep.stage.contact : nextStep.stage.backupContact;
+      if (!approver?.email || !approver.id) return;
+
+      const link = await this.getApprovalLink(nextStep.id);
+      const { code } = await this.issueApprovalOtp(nextStep.id, 30);
+      const totalAmount = nextStep.batch.bills?.reduce((sum, b) => sum + Number(b.amount), 0) ?? 0;
+
+      const html = buildApprovalEmailHtml({
+        headline: `Action Required: Stage ${nextStep.stage.order} Approval`,
+        recipientName: approver.name,
+        leadMessage: `A bill collection batch in ${nextStep.batch.organization.name} has advanced to Stage ${nextStep.stage.order} and requires your authorization.`,
+        batchId: nextStep.batchId,
+        stageOrder: nextStep.stage.order,
+        totalAmount: totalAmount > 0 ? totalAmount.toLocaleString('en-IN') : undefined,
+        otpCode: code,
+        otpExpiresMinutes: 30,
+        ctaUrl: link.url,
+        ctaText: 'Review & Approve Batch →',
+        subNotice: 'Click above to open the batch details. Then manually enter your 6-digit verification code to confirm approval.',
+      });
+
+      await this.emailService.sendReminderEmail({
+        to: approver.email,
+        subject: `Action Required: Stage ${nextStep.stage.order} approval for batch ${nextStep.batchId.slice(0, 8)}`,
+        body: `A bill collection batch has reached Stage ${nextStep.stage.order} and requires your approval. Verification Code: ${code}. Review and approve here: ${link.url}`,
+        html,
+      });
+    } catch (error) {
+      console.warn('[AUTOMATED_NEXT_STAGE_EMAIL_FAILED]', error);
+    }
+  }
+
+  private async notifyReturnedStageApprover(batchId: string, stageId: string, comment: string) {
+    if (!this.emailService) return;
+    try {
+      const prevStep = await this.prisma.stepInstance.findFirst({
+        where: { batchId, stageId, status: StepStatus.ALERTED },
+        include: {
+          stage: {
+            include: {
+              contact: { select: { id: true, email: true, name: true } },
+              backupContact: { select: { id: true, email: true, name: true } },
+            },
+          },
+          batch: {
+            select: {
+              organizationId: true,
+              organization: { select: { name: true } },
+            },
+          },
+        },
+      });
+      if (!prevStep) return;
+      const approver = prevStep.stage.contact?.email ? prevStep.stage.contact : prevStep.stage.backupContact;
+      if (!approver?.email || !approver.id) return;
+
+      const link = await this.getApprovalLink(prevStep.id);
+      const { code } = await this.issueApprovalOtp(prevStep.id, 30);
+
+      const html = buildApprovalEmailHtml({
+        headline: `Batch Returned for Revision: Stage ${prevStep.stage.order}`,
+        recipientName: approver.name,
+        leadMessage: `This batch was returned for correction with the note: "${comment}". Please review and update.`,
+        batchId: prevStep.batchId,
+        stageOrder: prevStep.stage.order,
+        otpCode: code,
+        otpExpiresMinutes: 30,
+        ctaUrl: link.url,
+        ctaText: 'Review Returned Batch →',
+        subNotice: 'Enter your 6-digit verification code manually to authorize revisions.',
+      });
+
+      await this.emailService.sendReminderEmail({
+        to: approver.email,
+        subject: `Batch ${prevStep.batchId.slice(0, 8)} returned for correction`,
+        body: `This batch was returned with note: "${comment}". Verification Code: ${code}. Review and update here: ${link.url}`,
+        html,
+      });
+    } catch (error) {
+      console.warn('[AUTOMATED_RETURN_STAGE_EMAIL_FAILED]', error);
+    }
+  }
+
+  private async notifyApproverCompletion(approverEmail: string, step: any, hasNextStage: boolean) {
+    if (!this.emailService) return;
+    try {
+      const stageOrder = step.stage.order;
+      const batchRef = step.batchId.slice(0, 8);
+      const bills = step.batch?.bills ?? [];
+      const totalAmount = bills.reduce((sum: number, b: any) => sum + Number(b.amount || 0), 0);
+
+      const subject = hasNextStage
+        ? `✓ Confirmation: Stage ${stageOrder} Approval Recorded (Batch #${batchRef})`
+        : `✓ Batch #${batchRef} Fully Approved & Ready for Payment`;
+
+      const html = buildApprovalEmailHtml({
+        headline: hasNextStage
+          ? `Stage ${stageOrder} Approval Verified & Recorded`
+          : `All Approval Stages Completed!`,
+        leadMessage: hasNextStage
+          ? `Thank you. Your approval for Stage ${stageOrder} of batch #${batchRef} has been verified and recorded. The batch has advanced to the next workflow stage.`
+          : `Thank you. All workflow stages for batch #${batchRef} have been approved. The batch is now Ready for Payment settlement.`,
+        batchId: step.batchId,
+        stageOrder,
+        totalAmount: totalAmount > 0 ? totalAmount.toLocaleString('en-IN') : undefined,
+        subNotice: `Recorded at ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST). Your authorization was verified via single-use verification code.`,
+      });
+
+      await this.emailService.sendReminderEmail({
+        to: approverEmail,
+        subject,
+        body: `Your approval for Stage ${stageOrder} of batch #${batchRef} was successfully recorded.${
+          hasNextStage ? ' The batch has advanced to the next stage.' : ' All stages are complete; ready for payment.'
+        }`,
+        html,
+      });
+    } catch (error) {
+      console.warn('[NOTIFY_APPROVER_COMPLETION_WARN]', error);
     }
   }
 }

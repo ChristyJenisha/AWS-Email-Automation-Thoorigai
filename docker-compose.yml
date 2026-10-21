@@ -37,7 +37,6 @@ services:
     volumes:
       - ./api:/workspace/api
       - /workspace/node_modules
-      - C:/Users/acer/.aws:/root/.aws:ro
     depends_on:
       db:
         condition: service_healthy
@@ -46,11 +45,13 @@ services:
     build:
       context: .
       dockerfile: infra/docker/web.Dockerfile
-    command: npm run dev --workspace=web -- --hostname 0.0.0.0
+    command: npm run dev --workspace=web -- --webpack --hostname 0.0.0.0
     env_file: .env
     environment:
+      INTERNAL_API_URL: http://api:3001
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
     ports:
+      - "80:3000"
       - "${WEB_PORT:-3000}:3000"
     volumes:
       - ./web:/workspace/web

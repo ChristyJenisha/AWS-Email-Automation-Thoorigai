@@ -162,7 +162,7 @@ export class AuthService {
   }
 
   private createToken(payload: Record<string, string>) {
-    return jwt.sign(payload, this.getJwtSecret(), { expiresIn: '8h' });
+    return jwt.sign(payload, this.getJwtSecret(), { expiresIn: '30d' });
   }
 
   private decodeToken(token: string): Record<string, string> {

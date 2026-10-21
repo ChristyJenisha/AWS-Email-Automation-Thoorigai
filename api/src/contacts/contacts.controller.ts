@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { AuthService } from '../auth/auth.service.js';
 import { CreateContactDto, UpdateContactDto } from './contact.dto.js';
@@ -32,5 +32,12 @@ export class ContactsController {
     this.authService.assertOrganizationAccess(request?.user, organizationId);
     this.authService.assertAdminAccess(request?.user);
     return this.contactsService.update(id, organizationId!, input);
+  }
+
+  @Delete(':id')
+  delete(@Req() request: any, @Param('id') id: string, @Query('organizationId') organizationId?: string) {
+    this.authService.assertOrganizationAccess(request?.user, organizationId);
+    this.authService.assertAdminAccess(request?.user);
+    return this.contactsService.delete(id, organizationId!);
   }
 }

@@ -41,7 +41,8 @@ export class ApprovalsController {
 
   @Post('complete')
   complete(@Body() input: ApprovalTokenActionDto, @Req() req?: any) {
-    const approval = this.transitions.verifyApprovalToken(input.token, true);
+    const requireOtp = process.env.REQUIRE_APPROVAL_OTP !== 'false';
+    const approval = this.transitions.verifyApprovalToken(input.token, requireOtp);
     const ip = (req?.headers?.['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req?.ip || 'unknown';
     const userAgent = (req?.headers?.['user-agent'] as string) || 'unknown';
     return this.transitions.complete(approval.stepInstanceId, approval.actorId, approval.organizationId, {
@@ -68,7 +69,8 @@ export class ApprovalsController {
 
   @Post('return')
   returnToPrevious(@Body() input: ApprovalTokenActionDto, @Req() req?: any) {
-    const approval = this.transitions.verifyApprovalToken(input.token, true);
+    const requireOtp = process.env.REQUIRE_APPROVAL_OTP !== 'false';
+    const approval = this.transitions.verifyApprovalToken(input.token, requireOtp);
     const ip = (req?.headers?.['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req?.ip || 'unknown';
     const userAgent = (req?.headers?.['user-agent'] as string) || 'unknown';
     return this.transitions.returnToPrevious(

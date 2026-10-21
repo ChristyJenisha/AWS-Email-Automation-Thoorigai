@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BatchStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateContactDto, UpdateContactDto } from './contact.dto.js';
 
@@ -60,4 +61,60 @@ export class ContactsService {
 
     return this.prisma.contact.update({ where: { id }, data, select: contactFields });
   }
+
+  async delete(id: string, organizationId: string) {
+    const contact = await this.prisma.contact.findFirst({
+      where: { id, organizationId },
+      select: { id: true, name: true },
+    });
+    if (!contact) throw new NotFoundException('Contact not found');
+
+    // 1. Check if there are any active in-flight bills currently held by this contact
+    const activeBatches = await this.prisma.batch.findMany({
+      where: {
+        template: {
+          stages: {
+            some: { contactId: id },
+          },
+        },
+        status: { in: [BatchStatus.IN_PROGRESS, BatchStatus.READY_FOR_PAYMENT] },
+      },
+      select: { id: true },
+    });
+
+    if (activeBatches.length > 0) {
+      throw new ConflictException(
+        `Cannot delete "${contact.name}". There are ${activeBatches.length} active bill(s) in progress using this approver. Settle or cancel those bills first.`,
+      );
+    }
+
+    // 2. Unlink any backup approver references
+    await this.prisma.workflowStage.updateMany({
+      where: { backupContactId: id },
+      data: { backupContactId: null },
+    });
+
+    // 3. For any workflow templates using this contact as primary approver with 0 active batches,
+    //    clean up the empty workflow so it doesn't block contact deletion
+    const stagesWherePrimary = await this.prisma.workflowStage.findMany({
+      where: { contactId: id },
+      select: { templateId: true },
+    });
+
+    const templateIds = Array.from(new Set(stagesWherePrimary.map((s) => s.templateId)));
+
+    if (templateIds.length > 0) {
+      await this.prisma.workflowStage.deleteMany({
+        where: { templateId: { in: templateIds } },
+      });
+      await this.prisma.workflowTemplate.deleteMany({
+        where: { id: { in: templateIds } },
+      });
+    }
+
+    // 4. Permanently delete the contact
+    await this.prisma.contact.delete({ where: { id } });
+    return { message: `Contact "${contact.name}" deleted permanently`, id };
+  }
 }
+
