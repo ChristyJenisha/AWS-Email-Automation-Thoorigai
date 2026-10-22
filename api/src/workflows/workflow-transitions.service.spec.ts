@@ -286,7 +286,21 @@ describe('WorkflowTransitionsService', () => {
       organizationId: 'demo-org',
     };
 
-    await expect(service.confirmOnBehalf('step-current', nonAdminUser)).rejects.toThrow('administrator');
+    await expect(service.confirmOnBehalf('step-current', nonAdminUser, 'Valid 10+ characters note')).rejects.toThrow('administrator');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects confirmation on behalf when note is missing or fewer than 10 characters', async () => {
+    const adminUser = {
+      id: 'admin-1',
+      email: 'admin@example.test',
+      role: 'Admin',
+      organizationId: 'demo-org',
+    };
+
+    await expect(service.confirmOnBehalf('step-current', adminUser, '')).rejects.toThrow('at least 10 characters');
+    await expect(service.confirmOnBehalf('step-current', adminUser, 'short')).rejects.toThrow('at least 10 characters');
+    await expect(service.confirmOnBehalf('step-current', adminUser, '          ')).rejects.toThrow('at least 10 characters');
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 

@@ -62,11 +62,38 @@ export function CurrentlyWithBoard({
   onDeleteBatch,
 }: CurrentlyWithBoardProps) {
   const [returnPresetActive, setReturnPresetActive] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
-  // Active batches currently in flight (not yet COMPLETED)
-  const activeBatches = liveBatches.filter(
-    (b) => b.status === "IN_PROGRESS" || b.status === "READY_FOR_PAYMENT"
-  );
+  React.useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Active batches currently in flight, sorted by deterministic urgency:
+  // 1. ESCALATED first
+  // 2. Time in stage descending (oldest alertedAt first)
+  // 3. Reminder count descending (tiebreaker)
+  const activeBatches = liveBatches
+    .filter((b) => b.status === "IN_PROGRESS" || b.status === "READY_FOR_PAYMENT")
+    .sort((a, b) => {
+      const stepA = a.stepInstances?.find((s) => s.status === "ALERTED" || s.status === "ESCALATED");
+      const stepB = b.stepInstances?.find((s) => s.status === "ALERTED" || s.status === "ESCALATED");
+
+      // 1. Escalated takes priority
+      const isEscalatedA = stepA?.status === "ESCALATED" ? 1 : 0;
+      const isEscalatedB = stepB?.status === "ESCALATED" ? 1 : 0;
+      if (isEscalatedB !== isEscalatedA) return isEscalatedB - isEscalatedA;
+
+      // 2. Time in stage descending (earlier alertedAt = longer in stage)
+      const timeA = stepA?.alertedAt ? new Date(stepA.alertedAt).getTime() : 0;
+      const timeB = stepB?.alertedAt ? new Date(stepB.alertedAt).getTime() : 0;
+      if (timeA && timeB && timeA !== timeB) return timeA - timeB;
+
+      // 3. Reminder count descending
+      const remindersA = stepA?.reminderCount ?? 0;
+      const remindersB = stepB?.reminderCount ?? 0;
+      return remindersB - remindersA;
+    });
 
   const handlePresetClick = (preset: string) => {
     if (returnPresetActive === preset) {
@@ -138,7 +165,7 @@ export function CurrentlyWithBoard({
           // Calculate time in stage if alertedAt exists
           const alertedDate = alertedStep?.alertedAt ? new Date(alertedStep.alertedAt) : null;
           const hoursInStage = alertedDate
-            ? Math.max(0, Math.round((Date.now() - alertedDate.getTime()) / (1000 * 60 * 60)))
+            ? Math.max(0, Math.round((nowMs - alertedDate.getTime()) / (1000 * 60 * 60)))
             : null;
 
           const isOverdue = (alertedStep?.reminderCount ?? 0) > 1 || (hoursInStage !== null && hoursInStage > 24);
@@ -436,28 +463,30 @@ export function CurrentlyWithBoard({
                   />
 
                   <div className="card-buttons-row">
-                    {/* Role switcher hint */}
-                    <div className="card-role-switch">
-                      <span>Test as:</span>
-                      <button
-                        type="button"
-                        onClick={() => void onLoginAs("approver@example.test", "demo123")}
-                      >
-                        Approver 1
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void onLoginAs("backup@example.test", "demo123")}
-                      >
-                        Approver 2
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void onLoginAs("admin@example.test", "demo123")}
-                      >
-                        Admin
-                      </button>
-                    </div>
+                    {/* Role switcher hint (demo mode only) */}
+                    {process.env.NEXT_PUBLIC_DEMO_MODE === "true" && (
+                      <div className="card-role-switch">
+                        <span>Test as:</span>
+                        <button
+                          type="button"
+                          onClick={() => void onLoginAs("approver@example.test", "demo123")}
+                        >
+                          Approver 1
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void onLoginAs("backup@example.test", "demo123")}
+                        >
+                          Approver 2
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void onLoginAs("admin@example.test", "demo123")}
+                        >
+                          Admin
+                        </button>
+                      </div>
+                    )}
 
                     <div className="card-action-btns">
                       {currentUser?.role?.toLowerCase() === "admin" && (

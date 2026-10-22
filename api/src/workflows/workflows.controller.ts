@@ -43,12 +43,14 @@ export class WorkflowsController {
 
   @Post()
   create(@Req() request: any, @Body() input: CreateWorkflowDto) {
+    this.authService.assertAdminAccess(request?.user);
     this.authService.assertOrganizationAccess(request?.user, input.organizationId);
     return this.workflowsService.create(input);
   }
 
   @Put(':id')
   async replace(@Req() request: any, @Param('id') id: string, @Body() input: ReplaceWorkflowDto) {
+    this.authService.assertAdminAccess(request?.user);
     const workflow = await this.workflowsService.get(id);
     this.authService.assertOrganizationAccess(request?.user, workflow.organizationId);
     return this.workflowsService.replace(id, input);
@@ -56,6 +58,7 @@ export class WorkflowsController {
 
   @Delete(':id')
   async delete(@Req() request: any, @Param('id') id: string) {
+    this.authService.assertAdminAccess(request?.user);
     const workflow = await this.workflowsService.get(id);
     this.authService.assertOrganizationAccess(request?.user, workflow.organizationId);
     return this.workflowsService.delete(id);

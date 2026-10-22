@@ -47,7 +47,7 @@ export function SubmitIndividualBillModal({
   const freshContact =
     contacts.find((c) => c.id === stageContactId) ?? liveWorkflow?.stages?.[0]?.contact;
   const contactName = freshContact?.name ?? "Approver";
-  const contactEmail = freshContact?.email ?? "approver@example.test";
+  const contactEmail = freshContact?.email ?? "";
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();

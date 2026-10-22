@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   Min,
+  MinLength,
   ValidateNested,
 } from 'class-validator';
 
@@ -41,10 +42,13 @@ export class CreateBatchDto {
   @Type(() => CreateBillInputDto)
   bills!: CreateBillInputDto[];
 }
+
 export class ConfirmOnBehalfDto {
-  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
-  note?: string;
+  @IsNotEmpty()
+  @MinLength(10)
+  note!: string;
 }
 
 export class ReassignStepDto {

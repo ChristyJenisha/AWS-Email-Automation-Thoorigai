@@ -15,12 +15,14 @@ export class BillsController {
 
   @Post('submit')
   async submit(@Req() request: any, @Body() input: SubmitIndividualBillDto) {
+    this.authService.assertAdminAccess(request?.user);
     this.authService.assertOrganizationAccess(request?.user, input.organizationId);
     return this.billsService.submitIndividualBill(input);
   }
 
   @Post()
   async createSingleBill(@Req() request: any, @Body() input: SubmitIndividualBillDto) {
+    this.authService.assertAdminAccess(request?.user);
     this.authService.assertOrganizationAccess(request?.user, input.organizationId);
     return this.billsService.submitIndividualBill(input);
   }

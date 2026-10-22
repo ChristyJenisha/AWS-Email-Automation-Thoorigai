@@ -115,9 +115,89 @@ export class AuthService {
     }
   }
 
+  isDemoEnabled(): boolean {
+    if (process.env.NODE_ENV === 'production') {
+      return process.env.DEMO_MODE === 'true';
+    }
+    return process.env.DEMO_MODE !== 'false';
+  }
+
+  getBootstrapAdminConfig(): { email: string; passwordHash: string; name: string } | undefined {
+    const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+    const password = process.env.ADMIN_PASSWORD;
+    const passwordHash = process.env.ADMIN_PASSWORD_HASH;
+
+    if (!email || (!password && !passwordHash)) {
+      return undefined;
+    }
+
+    return {
+      email,
+      name: process.env.ADMIN_NAME?.trim() || 'Administrator',
+      passwordHash: passwordHash || bcrypt.hashSync(password!, 10),
+    };
+  }
+
   private async findUserByEmail(email: string): Promise<(AppUser & { password: string }) | undefined> {
-    const demoUser = this.demoUsers[email];
-    if (demoUser) return demoUser;
+    // 1. Production bootstrap admin via environment credentials
+    const bootstrapAdmin = this.getBootstrapAdminConfig();
+    if (bootstrapAdmin && email.toLowerCase() === bootstrapAdmin.email) {
+      let orgId = process.env.ADMIN_ORG_ID?.trim() || 'demo-org';
+      let userId = 'bootstrap-admin';
+      let name = bootstrapAdmin.name;
+
+      if (this.prisma) {
+        try {
+          let contact = await this.prisma.contact.findFirst({
+            where: { email: { equals: bootstrapAdmin.email, mode: 'insensitive' } },
+            include: { organization: true },
+          });
+
+          if (!contact) {
+            let org = await this.prisma.organization.findFirst();
+            if (!org) {
+              org = await this.prisma.organization.create({
+                data: {
+                  id: orgId,
+                  name: 'Primary Organization',
+                },
+              });
+            }
+            contact = await this.prisma.contact.create({
+              data: {
+                organizationId: org.id,
+                name: bootstrapAdmin.name,
+                email: bootstrapAdmin.email,
+                role: 'Admin',
+                isActive: true,
+              },
+              include: { organization: true },
+            });
+          }
+
+          userId = contact.id;
+          orgId = contact.organizationId;
+          name = contact.name;
+        } catch {
+          // If database is not ready or throws, fallback to bootstrap IDs
+        }
+      }
+
+      return {
+        id: userId,
+        email: bootstrapAdmin.email,
+        name,
+        role: 'Admin',
+        organizationId: orgId,
+        password: bootstrapAdmin.passwordHash,
+      };
+    }
+
+    // 2. Demo users lookup (only when demo mode is active)
+    if (this.isDemoEnabled()) {
+      const demoUser = this.demoUsers[email];
+      if (demoUser) return demoUser;
+    }
 
     if (!this.prisma) return undefined;
 
@@ -126,7 +206,11 @@ export class AuthService {
       include: { organization: true },
     });
 
-    if (!contact) return undefined;
+    if (!contact || !contact.isActive) return undefined;
+
+    if (!this.isDemoEnabled()) {
+      return undefined;
+    }
 
     return {
       id: contact.id,
@@ -139,8 +223,22 @@ export class AuthService {
   }
 
   private async findUserById(userId: string): Promise<(AppUser & { password: string }) | undefined> {
-    const demoUser = Object.values(this.demoUsers).find((user) => user.id === userId);
-    if (demoUser) return demoUser;
+    const bootstrapAdmin = this.getBootstrapAdminConfig();
+    if (bootstrapAdmin && userId === 'bootstrap-admin') {
+      return {
+        id: 'bootstrap-admin',
+        email: bootstrapAdmin.email,
+        name: bootstrapAdmin.name,
+        role: 'Admin',
+        organizationId: process.env.ADMIN_ORG_ID?.trim() || 'demo-org',
+        password: bootstrapAdmin.passwordHash,
+      };
+    }
+
+    if (this.isDemoEnabled()) {
+      const demoUser = Object.values(this.demoUsers).find((user) => user.id === userId);
+      if (demoUser) return demoUser;
+    }
 
     if (!this.prisma) return undefined;
 
@@ -149,7 +247,7 @@ export class AuthService {
       include: { organization: true },
     });
 
-    if (!contact) return undefined;
+    if (!contact || !contact.isActive) return undefined;
 
     return {
       id: contact.id,
@@ -157,7 +255,7 @@ export class AuthService {
       name: contact.name,
       role: contact.role,
       organizationId: contact.organizationId,
-      password: bcrypt.hashSync('demo123', 10),
+      password: '',
     };
   }
 

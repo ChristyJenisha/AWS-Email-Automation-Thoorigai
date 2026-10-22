@@ -54,6 +54,8 @@ export type StepInstanceRecord = {
   stage?: {
     id?: string;
     order?: number;
+    reminderIntervalHours?: number;
+    maxReminders?: number;
     contact?: { id?: string; name?: string; email?: string; role?: string };
     backupContact?: { id?: string; name?: string; email?: string; role?: string };
   };
@@ -62,8 +64,10 @@ export type StepInstanceRecord = {
 export type BatchRecord = {
   id: string;
   status?: string;
+  template?: { id: string; name: string };
   bills?: BillRecord[];
   stepInstances?: StepInstanceRecord[];
+  createdAt?: string;
 };
 
 export type BatchNotification = {
@@ -108,6 +112,8 @@ export type Bill = {
   status: BillStatus;
   isDemo: boolean;
 };
+
+export type DisplayBill = Bill;
 
 export type BatchBillDraft = {
   billNumber: string;

@@ -2,6 +2,11 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+if (process.env.NODE_ENV === 'production' && process.env.DEMO_MODE !== 'true') {
+  console.log('Skipping demo seed in production (DEMO_MODE !== true)');
+  process.exit(0);
+}
+
 try {
   const organization = await prisma.organization.upsert({
     where: { id: 'demo-org' },

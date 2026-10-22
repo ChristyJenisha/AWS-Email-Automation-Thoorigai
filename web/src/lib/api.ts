@@ -9,7 +9,7 @@ import {
 
 export function getApiBase(): string {
   if (typeof window !== "undefined") {
-    return "";
+    return "/api";
   }
   return process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 }
@@ -44,8 +44,12 @@ export async function authFetch(
   }
   let response = await fetch(url, { ...init, headers });
 
-  // If unauthorized due to an expired token, auto-refresh and retry seamlessly
-  if (response.status === 401 && typeof window !== "undefined") {
+  // If unauthorized due to an expired token in demo mode, auto-refresh and retry seamlessly
+  if (
+    response.status === 401 &&
+    typeof window !== "undefined" &&
+    process.env.NEXT_PUBLIC_DEMO_MODE === "true"
+  ) {
     try {
       const storedUser = window.localStorage.getItem("thoorigai-user");
       let loginEmail = "admin@example.test";

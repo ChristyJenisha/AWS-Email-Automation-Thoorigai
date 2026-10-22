@@ -39,6 +39,7 @@ export class BatchesController {
 
   @Post()
   create(@Req() request: any, @Body() input: CreateBatchDto) {
+    this.authService.assertAdminAccess(request?.user);
     this.authService.assertOrganizationAccess(request?.user, input.organizationId);
     return this.batchesService.create(input);
   }

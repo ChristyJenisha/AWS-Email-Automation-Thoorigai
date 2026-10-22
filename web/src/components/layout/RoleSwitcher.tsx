@@ -27,34 +27,36 @@ export function RoleSwitcher({
           <span>ACT AS ROLE:</span>
         </span>
 
-        <div className="role-switcher-buttons" role="group" aria-label="Switch demo role">
-          <button
-            className={`role-btn ${currentRole === "admin" ? "active" : ""}`}
-            type="button"
-            onClick={() => void onLoginAs("admin@example.test", "demo123")}
-          >
-            <Crown size={14} className="role-icon" />
-            <span>Admin</span>
-          </button>
+        {process.env.NEXT_PUBLIC_DEMO_MODE === "true" && (
+          <div className="role-switcher-buttons" role="group" aria-label="Switch demo role">
+            <button
+              className={`role-btn ${currentRole === "admin" ? "active" : ""}`}
+              type="button"
+              onClick={() => void onLoginAs("admin@example.test", "demo123")}
+            >
+              <Crown size={14} className="role-icon" />
+              <span>Admin</span>
+            </button>
 
-          <button
-            className={`role-btn ${currentEmail === "approver@example.test" ? "active" : ""}`}
-            type="button"
-            onClick={() => void onLoginAs("approver@example.test", "demo123")}
-          >
-            <UserCheck size={14} className="role-icon" />
-            <span>Primary Approver (Stage 1)</span>
-          </button>
+            <button
+              className={`role-btn ${currentEmail === "approver@example.test" ? "active" : ""}`}
+              type="button"
+              onClick={() => void onLoginAs("approver@example.test", "demo123")}
+            >
+              <UserCheck size={14} className="role-icon" />
+              <span>Primary Approver (Stage 1)</span>
+            </button>
 
-          <button
-            className={`role-btn ${currentEmail === "backup@example.test" ? "active" : ""}`}
-            type="button"
-            onClick={() => void onLoginAs("backup@example.test", "demo123")}
-          >
-            <ShieldCheck size={14} className="role-icon" />
-            <span>Backup Approver (Stage 2)</span>
-          </button>
-        </div>
+            <button
+              className={`role-btn ${currentEmail === "backup@example.test" ? "active" : ""}`}
+              type="button"
+              onClick={() => void onLoginAs("backup@example.test", "demo123")}
+            >
+              <ShieldCheck size={14} className="role-icon" />
+              <span>Backup Approver (Stage 2)</span>
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="role-switcher-active">

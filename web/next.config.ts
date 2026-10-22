@@ -7,10 +7,16 @@ const nextConfig: NextConfig = {
     "13.126.39.176:80",
     "localhost",
     "localhost:3000",
+    "192.168.1.12",
+    "192.168.1.12:3000",
   ],
   async rewrites() {
     const apiBase = process.env.INTERNAL_API_URL || "http://localhost:3001";
     return [
+      {
+        source: "/api/:path*",
+        destination: `${apiBase}/:path*`,
+      },
       {
         source: "/approvals/:path*",
         destination: `${apiBase}/approvals/:path*`,

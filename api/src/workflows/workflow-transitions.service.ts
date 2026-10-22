@@ -219,6 +219,10 @@ export class WorkflowTransitionsService {
     if (adminUser.role.toLowerCase() !== 'admin') {
       throw new ForbiddenException('Only an administrator can confirm on behalf of an approver');
     }
+    const trimmedNote = note?.trim();
+    if (!trimmedNote || trimmedNote.length < 10) {
+      throw new BadRequestException('An offline confirmation note of at least 10 characters is required');
+    }
     const step = await this.getActiveStep(stepInstanceId);
     this.validateOrganizationForStep(step, adminUser.organizationId);
 
@@ -228,7 +232,7 @@ export class WorkflowTransitionsService {
         status: StepStatus.COMPLETED,
         completedAt: now,
         nextReminderAt: null,
-        lastComment: note?.trim() ? `Manual confirmation: ${note.trim()}` : 'Manually confirmed offline by admin',
+        lastComment: `Manual confirmation: ${trimmedNote}`,
       });
 
       const nextStage = await transaction.workflowStage.findFirst({
@@ -369,7 +373,7 @@ export class WorkflowTransitionsService {
       where: { id: stepInstanceId },
       include: {
         stage: { include: { contact: true } },
-        batch: { include: { organization: true } },
+        batch: { include: { organization: true, bills: true } },
       },
     });
     if (!step) throw new NotFoundException('Workflow step not found');
@@ -432,10 +436,31 @@ export class WorkflowTransitionsService {
     try {
       if (this.emailService && newContact.email) {
         const link = await this.getApprovalLink(step.id);
+        const { code } = await this.issueApprovalOtp(step.id, 30);
+        const totalAmount = step.batch.bills?.reduce((sum, b) => sum + Number(b.amount), 0) ?? 0;
+
+        const html = buildApprovalEmailHtml({
+          headline: `Action Required: Bill Approval Reassigned to You`,
+          recipientName: newContact.name,
+          leadMessage: `A bill collection batch in ${step.batch.organization.name} has been reassigned to you for authorization.${
+            normalizedReason ? ` Reason from administrator: "${normalizedReason}".` : ''
+          } Please review the bills and authorize the batch.`,
+          batchId: step.batchId,
+          stageOrder: step.stage.order,
+          totalAmount: totalAmount > 0 ? totalAmount : undefined,
+          otpCode: code,
+          otpExpiresMinutes: 30,
+          ctaUrl: link.url,
+          ctaText: 'Review & Authorize Batch →',
+        });
+
         await this.emailService.sendReminderEmail({
           to: newContact.email,
           subject: `Action Required: Bill approval reassigned to you for ${step.batch.organization.name}`,
-          body: `You have been assigned to approve Batch ${step.batch.id.slice(0, 8)}. Please review the bills here: ${link.url}`,
+          body: `Hello ${newContact.name},\n\nYou have been assigned to approve Batch ${step.batch.id.slice(0, 8)} in ${step.batch.organization.name}.${
+            normalizedReason ? `\nReason: ${normalizedReason}` : ''
+          }\n\nSingle-Use Verification Code: ${code} (valid for 30 minutes)\n\nPlease review and approve the batch here:\n${link.url}`,
+          html,
         });
       }
     } catch {

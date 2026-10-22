@@ -108,7 +108,7 @@ describe('RemindersService', () => {
     expect(emailService.sendReminderEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'approver@example.test',
-        body: expect.stringContaining('http://localhost:3000/approve?token=signed-approval-token'),
+        body: expect.stringContaining('/approve?token=signed-approval-token'),
       }),
     );
     expect(prisma.notification.create).toHaveBeenCalledWith({

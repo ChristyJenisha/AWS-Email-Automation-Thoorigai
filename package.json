@@ -10,7 +10,7 @@
     "dev": "concurrently -k -n api,web -c cyan,green \"npm run start:dev --workspace=api\" \"npm run dev --workspace=web\"",
     "build": "npm run build --workspace=api && npm run build --workspace=web",
     "lint": "npm run lint --workspace=api && npm run lint --workspace=web",
-    "test": "npm test --workspace=api",
+    "test": "npm test --workspace=api && npm test --workspace=web",
     "format": "prettier --write \"api/src/**/*.ts\" \"web/src/**/*.{ts,tsx}\"",
     "prepare": "husky"
   },

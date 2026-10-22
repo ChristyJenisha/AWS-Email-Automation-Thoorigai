@@ -11,6 +11,7 @@ describe('BillsController', () => {
   };
   const authService = {
     assertOrganizationAccess: vi.fn(),
+    assertAdminAccess: vi.fn(),
   };
   const controller = new BillsController(
     billsService as unknown as BillsService,
@@ -33,6 +34,7 @@ describe('BillsController', () => {
 
     const result = await controller.submit(req, input);
 
+    expect(authService.assertAdminAccess).toHaveBeenCalledWith(req.user);
     expect(authService.assertOrganizationAccess).toHaveBeenCalledWith(req.user, 'org-1');
     expect(billsService.submitIndividualBill).toHaveBeenCalledWith(input);
     expect(result).toHaveProperty('batchId', 'batch-1');

@@ -31,7 +31,7 @@ export function WorkflowNextStepsModal({
   const alertedStep = batch.stepInstances?.find((s) => s.status === "ALERTED") ?? batch.stepInstances?.[0];
   const approver = alertedStep?.stage?.contact;
   const approverName = approver?.name ?? "Approver";
-  const approverEmail = approver?.email ?? "approver@example.test";
+  const approverEmail = approver?.email ?? "";
   const stageOrder = alertedStep?.stage?.order ?? 1;
 
   const totalAmount = amount ?? (batch.bills ?? []).reduce((sum, b) => sum + Number(b.amount ?? 0), 0);

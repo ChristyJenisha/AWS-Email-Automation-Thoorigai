@@ -64,6 +64,7 @@ export class PaymentsController {
     @Req() request: any,
     @Body() input: CreatePaymentDto,
   ) {
+    this.authService.assertAdminAccess(request?.user);
     const batch =
       await this.paymentsService.getBatch(
         input.batchId,
@@ -86,6 +87,7 @@ export class PaymentsController {
     @Param('paymentId') paymentId: string,
     @Body() input: CreatePaymentProofUploadUrlDto,
   ) {
+    this.authService.assertAdminAccess(request?.user);
     const payment =
       await this.paymentsService.getPayment(
         paymentId,
@@ -107,6 +109,7 @@ export class PaymentsController {
     @Req() request: any,
     @Param('paymentId') paymentId: string,
   ) {
+    this.authService.assertAdminAccess(request?.user);
     const payment = await this.paymentsService.getPayment(paymentId);
     this.authService.assertOrganizationAccess(request?.user, payment.batch.organizationId);
 
@@ -132,6 +135,7 @@ export class PaymentsController {
     @Req() request: any,
     @Param('paymentId') paymentId: string,
   ) {
+    this.authService.assertAdminAccess(request?.user);
     const payment = await this.paymentsService.getPayment(paymentId);
 
     this.authService.assertOrganizationAccess(
@@ -148,6 +152,7 @@ export class PaymentsController {
     @Req() request: any,
     @Param('paymentId') paymentId: string,
   ) {
+    this.authService.assertAdminAccess(request?.user);
     const payment = await this.paymentsService.getPayment(paymentId);
     this.authService.assertOrganizationAccess(request?.user, payment.batch.organizationId);
     const proof = await this.paymentsService.getLocalProofFile(paymentId);
@@ -163,6 +168,7 @@ export class PaymentsController {
     @Param('paymentId') paymentId: string,
     @Body() input: ConfirmPaymentProofDto,
   ) {
+    this.authService.assertAdminAccess(request?.user);
     const payment = await this.paymentsService.getPayment(paymentId);
 
     this.authService.assertOrganizationAccess(
@@ -179,6 +185,7 @@ export class PaymentsController {
     @Param('paymentId') paymentId: string,
     @Body() input: AllocateOnAccountPaymentDto,
   ) {
+    this.authService.assertAdminAccess(request?.user);
     const payment =
       await this.paymentsService.getPayment(
         paymentId,

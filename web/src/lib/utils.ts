@@ -124,3 +124,94 @@ export const matchesBillFilter = (bill: Bill, option: BillFilter): boolean => {
   return bill.status === option;
 };
 
+export const isValidConfirmNote = (note: string | null | undefined): boolean => {
+  if (typeof note !== "string") return false;
+  return note.trim().length >= 10;
+};
+
+export const compareActiveBatchesUrgency = (a: BatchRecord, b: BatchRecord): number => {
+  const stepA = a.stepInstances?.find((s) => s.status === "ALERTED" || s.status === "ESCALATED");
+  const stepB = b.stepInstances?.find((s) => s.status === "ALERTED" || s.status === "ESCALATED");
+
+  // 1. Escalated takes top priority
+  const isEscalatedA = stepA?.status === "ESCALATED" ? 1 : 0;
+  const isEscalatedB = stepB?.status === "ESCALATED" ? 1 : 0;
+  if (isEscalatedB !== isEscalatedA) return isEscalatedB - isEscalatedA;
+
+  // 2. Time in stage descending (oldest alertedAt first)
+  const timeA = stepA?.alertedAt ? new Date(stepA.alertedAt).getTime() : 0;
+  const timeB = stepB?.alertedAt ? new Date(stepB.alertedAt).getTime() : 0;
+  if (timeA && timeB && timeA !== timeB) return timeA - timeB;
+
+  // 3. Reminder count descending (tiebreaker)
+  const remindersA = stepA?.reminderCount ?? 0;
+  const remindersB = stepB?.reminderCount ?? 0;
+  return remindersB - remindersA;
+};
+
+export const isApproverRoute = (pathname: string | null | undefined): boolean => {
+  if (!pathname) return false;
+  return pathname.startsWith("/approve");
+};
+
+export interface BatchFilterOptions {
+  status?: string | null;
+  approver?: string | null;
+  search?: string | null;
+}
+
+export const filterBatches = (batches: BatchRecord[], options: BatchFilterOptions): BatchRecord[] => {
+  const { status, approver, search } = options;
+  const normalizedStatus = status && status !== "ALL" ? status.toUpperCase() : null;
+  const normalizedSearch = search?.trim().toLowerCase() || null;
+
+  return batches.filter((b) => {
+    if (normalizedStatus && b.status !== normalizedStatus) {
+      return false;
+    }
+    if (approver) {
+      const activeStep = b.stepInstances?.find((s) => s.status === "ALERTED" || s.status === "ESCALATED");
+      const contactId = activeStep?.stage?.contact?.id;
+      if (contactId !== approver) {
+        return false;
+      }
+    }
+    if (normalizedSearch) {
+      const matchesId = b.id.toLowerCase().includes(normalizedSearch);
+      const matchesBills = (b.bills ?? []).some((bill) => bill.billNumber?.toLowerCase().includes(normalizedSearch));
+      if (!matchesId && !matchesBills) {
+        return false;
+      }
+    }
+    return true;
+  });
+};
+
+export const sortBatches = (
+  batches: BatchRecord[],
+  field: "date" | "amount" | "bills" | "status" | "id",
+  order: "asc" | "desc" = "desc"
+): BatchRecord[] => {
+  const list = [...batches];
+  list.sort((a, b) => {
+    let comparison = 0;
+    if (field === "date") {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      comparison = timeA - timeB;
+    } else if (field === "amount") {
+      const amountA = (a.bills ?? []).reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+      const amountB = (b.bills ?? []).reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+      comparison = amountA - amountB;
+    } else if (field === "bills") {
+      comparison = (a.bills ?? []).length - (b.bills ?? []).length;
+    } else if (field === "status") {
+      comparison = (a.status || "").localeCompare(b.status || "");
+    } else if (field === "id") {
+      comparison = a.id.localeCompare(b.id);
+    }
+    return order === "asc" ? comparison : -comparison;
+  });
+  return list;
+};
+
