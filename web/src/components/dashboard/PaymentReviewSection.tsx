@@ -3,7 +3,7 @@
 import React from "react";
 import { CreditCard, Trash2, PlusCircle, CheckSquare } from "lucide-react";
 import { AppUser, BatchRecord, PaymentRecord } from "../../types";
-import { formatExactCurrency } from "../../lib/utils";
+import { formatExactCurrency, formatBatchId } from "../../lib/utils";
 
 type PaymentReviewSectionProps = {
   liveBatches: BatchRecord[];
@@ -45,7 +45,7 @@ export function PaymentReviewSection({
         {readyBatches.map((batch) => (
           <div className="payment-review-batch" key={batch.id}>
             <div className="payment-batch-header">
-              <strong>Batch {batch.id.slice(0, 8)}</strong>
+              <strong>Batch {formatBatchId(batch.id)}</strong>
               <span>{batch.bills?.length ?? 0} bill(s) verified & approved</span>
             </div>
 

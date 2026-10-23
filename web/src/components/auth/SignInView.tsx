@@ -60,7 +60,7 @@ export function SignInView() {
             padding: "28px 28px 20px",
             borderBottom: "1px solid var(--border-light)",
             textAlign: "center",
-            background: "linear-gradient(to bottom, #f8fafc, #ffffff)",
+            background: "var(--bg-surface)",
           }}
         >
           <div
@@ -71,8 +71,8 @@ export function SignInView() {
               width: 44,
               height: 44,
               borderRadius: "10px",
-              background: "var(--brand-primary, #0f766e)",
-              color: "#ffffff",
+              background: "var(--brand-primary)",
+              color: "var(--text-inverse)",
               fontWeight: 800,
               fontSize: 22,
               marginBottom: 12,
@@ -84,17 +84,17 @@ export function SignInView() {
             style={{
               fontSize: 20,
               fontWeight: 700,
-              color: "var(--text-primary, #0f172a)",
+              color: "var(--text-primary)",
               margin: 0,
               letterSpacing: "-0.02em",
             }}
           >
-            Thoorigai<span style={{ color: "var(--brand-primary, #0f766e)" }}>Ledger</span>
+            Thoorigai<span style={{ color: "var(--brand-primary)" }}>Ledger</span>
           </h1>
           <p
             style={{
               fontSize: 13,
-              color: "var(--text-muted, #64748b)",
+              color: "var(--text-muted)",
               marginTop: 6,
               marginBottom: 0,
             }}
@@ -112,10 +112,10 @@ export function SignInView() {
                 alignItems: "flex-start",
                 gap: 10,
                 padding: "10px 14px",
-                background: "var(--urgency-rose-bg, #fef2f2)",
-                border: "1px solid #fecaca",
-                borderRadius: "var(--radius-md, 8px)",
-                color: "var(--urgency-rose, #be123c)",
+                background: "var(--urgency-rose-bg)",
+                border: "1px solid var(--urgency-rose-border)",
+                borderRadius: "var(--radius-md)",
+                color: "var(--urgency-rose)",
                 fontSize: 12.5,
                 lineHeight: 1.4,
                 marginBottom: 20,
@@ -137,7 +137,7 @@ export function SignInView() {
                 fontWeight: 700,
                 textTransform: "uppercase",
                 letterSpacing: "0.05em",
-                color: "var(--text-muted, #64748b)",
+                color: "var(--text-muted)",
                 marginBottom: 10,
               }}
             >
@@ -153,16 +153,16 @@ export function SignInView() {
                   alignItems: "center",
                   justifyContent: "space-between",
                   padding: "10px 14px",
-                  borderRadius: "var(--radius-md, 8px)",
-                  border: "1px solid var(--border-strong, #cbd5e1)",
-                  background: "#ffffff",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border-strong)",
+                  background: "var(--bg-surface)",
                   cursor: "pointer",
                   textAlign: "left",
                   transition: "all 140ms ease",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <Shield size={16} style={{ color: "var(--brand-primary, #0f766e)" }} />
+                  <Shield size={16} style={{ color: "var(--brand-primary)" }} />
                   <div>
                     <strong style={{ fontSize: 13, display: "block", color: "var(--text-primary)" }}>
                       Administrator (Full Access)
@@ -178,8 +178,8 @@ export function SignInView() {
                     fontWeight: 600,
                     padding: "3px 8px",
                     borderRadius: 4,
-                    background: "var(--bg-subtle, #f1f5f9)",
-                    color: "var(--brand-primary, #0f766e)",
+                    background: "var(--bg-subtle)",
+                    color: "var(--brand-primary)",
                   }}
                 >
                   Admin
@@ -195,16 +195,16 @@ export function SignInView() {
                   alignItems: "center",
                   justifyContent: "space-between",
                   padding: "10px 14px",
-                  borderRadius: "var(--radius-md, 8px)",
-                  border: "1px solid var(--border-subtle, #e2e8f0)",
-                  background: "#ffffff",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border-light)",
+                  background: "var(--bg-surface)",
                   cursor: "pointer",
                   textAlign: "left",
                   transition: "all 140ms ease",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <User size={16} style={{ color: "#3b82f6" }} />
+                  <User size={16} style={{ color: "var(--status-info)" }} />
                   <div>
                     <strong style={{ fontSize: 13, display: "block", color: "var(--text-primary)" }}>
                       Primary Approver
@@ -220,8 +220,8 @@ export function SignInView() {
                     fontWeight: 600,
                     padding: "3px 8px",
                     borderRadius: 4,
-                    background: "#eff6ff",
-                    color: "#2563eb",
+                    background: "var(--status-info-bg)",
+                    color: "var(--status-info-text)",
                   }}
                 >
                   Stage 1
@@ -237,16 +237,16 @@ export function SignInView() {
                   alignItems: "center",
                   justifyContent: "space-between",
                   padding: "10px 14px",
-                  borderRadius: "var(--radius-md, 8px)",
-                  border: "1px solid var(--border-subtle, #e2e8f0)",
-                  background: "#ffffff",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border-light)",
+                  background: "var(--bg-surface)",
                   cursor: "pointer",
                   textAlign: "left",
                   transition: "all 140ms ease",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <Shield size={16} style={{ color: "#d97706" }} />
+                  <Shield size={16} style={{ color: "var(--urgency-amber)" }} />
                   <div>
                     <strong style={{ fontSize: 13, display: "block", color: "var(--text-primary)" }}>
                       Backup Approver
@@ -262,8 +262,8 @@ export function SignInView() {
                     fontWeight: 600,
                     padding: "3px 8px",
                     borderRadius: 4,
-                    background: "#fef3c7",
-                    color: "#b45309",
+                    background: "var(--urgency-amber-bg)",
+                    color: "var(--urgency-amber-text)",
                   }}
                 >
                   Stage 2
@@ -278,13 +278,13 @@ export function SignInView() {
               alignItems: "center",
               gap: 12,
               margin: "20px 0 16px",
-              color: "var(--text-muted, #94a3b8)",
+              color: "var(--text-muted)",
               fontSize: 12,
             }}
           >
-            <div style={{ flex: 1, height: 1, background: "var(--border-subtle, #e2e8f0)" }} />
+            <div style={{ flex: 1, height: 1, background: "var(--border-light)" }} />
             <span>or sign in with email</span>
-            <div style={{ flex: 1, height: 1, background: "var(--border-subtle, #e2e8f0)" }} />
+            <div style={{ flex: 1, height: 1, background: "var(--border-light)" }} />
           </div>
         </>
       )}
@@ -303,7 +303,7 @@ export function SignInView() {
                   display: "block",
                   fontSize: 12,
                   fontWeight: 600,
-                  color: "var(--text-secondary, #334155)",
+                  color: "var(--text-secondary)",
                   marginBottom: 6,
                 }}
               >
@@ -328,11 +328,11 @@ export function SignInView() {
                   style={{
                     width: "100%",
                     padding: "9px 12px 9px 34px",
-                    borderRadius: "var(--radius-md, 8px)",
-                    border: "1px solid var(--border-strong, #cbd5e1)",
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--border-strong)",
                     fontSize: 13,
                     fontFamily: "inherit",
-                    background: "#ffffff",
+                    background: "var(--bg-surface)",
                   }}
                 />
               </div>
@@ -344,7 +344,7 @@ export function SignInView() {
                   display: "block",
                   fontSize: 12,
                   fontWeight: 600,
-                  color: "var(--text-secondary, #334155)",
+                  color: "var(--text-secondary)",
                   marginBottom: 6,
                 }}
               >
@@ -369,11 +369,11 @@ export function SignInView() {
                   style={{
                     width: "100%",
                     padding: "9px 12px 9px 34px",
-                    borderRadius: "var(--radius-md, 8px)",
-                    border: "1px solid var(--border-strong, #cbd5e1)",
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--border-strong)",
                     fontSize: 13,
                     fontFamily: "inherit",
-                    background: "#ffffff",
+                    background: "var(--bg-surface)",
                   }}
                 />
               </div>

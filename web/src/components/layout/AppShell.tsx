@@ -15,6 +15,10 @@ import {
   ChevronDown,
   UserCheck,
   Clock,
+  Menu,
+  X,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { useDataContext } from "../../lib/DataContext";
 import { initials, isApproverRoute } from "../../lib/utils";
@@ -51,7 +55,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const [currentDateTime, setCurrentDateTime] = useState("");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("thoorigai-theme-v2") as "dark" | "light" | null;
+      return saved || "light";
+    }
+    return "light";
+  });
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Synchronize document attribute with active theme
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("thoorigai-theme-v2", next);
+    }
+  };
 
   // Live Clock Ticker
   useEffect(() => {
@@ -99,11 +124,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "var(--bg-subtle, #f8fafc)",
+          background: "var(--bg-subtle)",
           fontFamily: "inherit",
         }}
       >
-        <div style={{ textAlign: "center", color: "var(--text-muted, #64748b)" }}>
+        <div style={{ textAlign: "center", color: "var(--text-muted)" }}>
           <div
             style={{
               display: "inline-flex",
@@ -112,8 +137,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               width: 48,
               height: 48,
               borderRadius: 12,
-              background: "var(--brand-primary, #0f766e)",
-              color: "#fff",
+              background: "var(--brand-primary)",
+              color: "var(--text-inverse)",
               fontWeight: 800,
               fontSize: 24,
               marginBottom: 16,
@@ -202,6 +227,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={`nav-item ${isActive ? "active" : ""}`}
+                title={item.label}
               >
                 <Icon className="nav-icon" size={16} />
                 <span className="nav-item-title">{item.label}</span>
@@ -216,17 +242,144 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
       </aside>
 
+      {/* Mobile Navigation Drawer */}
+      {mobileMenuOpen && (
+        <>
+          <div
+            className="shell-mobile-drawer-backdrop"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
+          <div
+            className="shell-mobile-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Mobile Navigation"
+          >
+            <div className="shell-mobile-drawer-header">
+              <Link
+                className="brand"
+                href="/"
+                onClick={() => setMobileMenuOpen(false)}
+                style={{ padding: 0 }}
+              >
+                <span className="brand-mark">t</span>
+                <span className="brand-name">
+                  thoorigai<span>ledger</span>
+                </span>
+              </Link>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  className="shell-theme-toggle-btn"
+                  title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
+                  aria-label={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 32,
+                    height: 32,
+                    borderRadius: 6,
+                    border: "1px solid var(--border-light)",
+                    background: "var(--bg-subtle)",
+                    color: "var(--text-secondary)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+                </button>
+                <button
+                  type="button"
+                  className="shell-mobile-drawer-close"
+                  onClick={() => setMobileMenuOpen(false)}
+                  aria-label="Close mobile navigation"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="shell-mobile-drawer-org">
+              <Building2 size={14} className="shell-org-icon" />
+              <span>Thoorigai Infotech</span>
+              <span
+                className="shell-system-status"
+                style={{ marginLeft: "auto", fontSize: 10, padding: "2px 8px" }}
+              >
+                <span className="shell-pulse-dot" /> Live
+              </span>
+            </div>
+
+            <nav className="shell-mobile-drawer-nav">
+              {navItems.map((item) => {
+                const isActive =
+                  item.href === "/"
+                    ? pathname === "/"
+                    : pathname.startsWith(item.href);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`shell-mobile-drawer-item ${isActive ? "active" : ""}`}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <Icon size={18} />
+                    <span>{item.label}</span>
+                    {item.badge !== undefined && (
+                      <span
+                        className={`shell-nav-pill shell-nav-pill--${
+                          item.badgeVariant ?? "neutral"
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <div className="shell-mobile-drawer-footer">
+              <div
+                className="shell-dropdown-user-header"
+                style={{ marginBottom: 12 }}
+              >
+                <strong>{currentUser?.name ?? "Admin"}</strong>
+                <small>
+                  {currentUser?.email || "Signed in"} ({currentUser?.role ?? "Admin"})
+                </small>
+              </div>
+              <button
+                type="button"
+                className="shell-dropdown-item shell-dropdown-item--danger"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  signOut();
+                }}
+                style={{ width: "100%", justifyContent: "center" }}
+              >
+                <LogOut size={15} />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Main Content Area */}
       <div className="shell-app-main-content">
         {/* Reconnecting / Network Error Banner */}
         {error && (
           <div
             style={{
-              background: "#fffbeb",
-              color: "#b45309",
+              background: "var(--urgency-amber-bg)",
+              color: "var(--urgency-amber-text)",
               padding: "9px 18px",
               fontSize: 12.5,
-              borderBottom: "1px solid #fde68a",
+              borderBottom: "1px solid var(--urgency-amber-border)",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -234,7 +387,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span className="shell-pulse-dot" style={{ background: "#d97706" }} />
+              <span className="shell-pulse-dot" style={{ background: "var(--urgency-amber)" }} />
               <span>
                 <strong>Reconnecting…</strong> Unable to sync latest updates with server. Showing cached data (updated{" "}
                 {secondsAgo}s ago).
@@ -245,9 +398,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               onClick={() => void refreshData()}
               disabled={isRefreshing}
               style={{
-                background: "#ffffff",
-                border: "1px solid #d97706",
-                color: "#b45309",
+                background: "var(--bg-surface)",
+                border: "1px solid var(--urgency-amber)",
+                color: "var(--urgency-amber-text)",
                 padding: "3px 10px",
                 borderRadius: 4,
                 fontSize: 11.5,
@@ -263,6 +416,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* TopBar */}
         <header className="shell-topbar" aria-label="Application header">
           <div className="shell-topbar-left">
+            <button
+              type="button"
+              className="shell-mobile-menu-btn"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Open navigation menu"
+            >
+              <Menu size={18} />
+            </button>
+
             <div className="shell-org-indicator">
               <Building2 size={15} className="shell-org-icon" />
               <span className="shell-org-label">ORGANIZATION:</span>
@@ -285,15 +447,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   alignItems: "center",
                   gap: 6,
                   fontSize: 12.5,
-                  color: "var(--text-secondary, #475569)",
+                  color: "var(--text-secondary)",
                   padding: "4px 10px",
                   borderRadius: 6,
-                  background: "var(--bg-subtle, #f1f5f9)",
-                  border: "1px solid var(--border-light, #e2e8f0)",
+                  background: "var(--bg-subtle)",
+                  border: "1px solid var(--border-light)",
                 }}
                 title="Current Date & Time"
               >
-                <Clock size={13} style={{ color: "var(--text-muted, #64748b)" }} />
+                <Clock size={13} style={{ color: "var(--text-muted)" }} />
                 <span>{currentDateTime}</span>
               </div>
             )}
@@ -315,6 +477,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <span>Refresh</span>
               </button>
             </div>
+
+            {/* Theme Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="shell-theme-toggle-btn"
+              title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
+              aria-label={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 32,
+                height: 32,
+                borderRadius: 6,
+                border: "1px solid var(--border-light)",
+                background: "var(--bg-subtle)",
+                color: "var(--text-secondary)",
+                cursor: "pointer",
+                transition: "all 120ms ease",
+              }}
+            >
+              {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
 
             {/* User Dropdown */}
             <div className="shell-user-menu-wrapper" ref={userMenuRef}>
@@ -339,10 +525,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     right: 0,
                     top: "calc(100% + 6px)",
                     minWidth: 230,
-                    background: "var(--bg-surface, #fff)",
-                    border: "1px solid var(--border-subtle, #e2e8f0)",
-                    borderRadius: "var(--radius-md, 8px)",
-                    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+                    background: "var(--bg-surface)",
+                    border: "1px solid var(--border-light)",
+                    borderRadius: "var(--radius-md)",
+                    boxShadow: "var(--shadow-lg)",
                     padding: 6,
                     zIndex: 50,
                   }}
@@ -383,7 +569,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           background: currentUser?.email === "approver@example.test" ? "var(--bg-subtle)" : "transparent",
                         }}
                       >
-                        <UserCheck size={14} style={{ color: "#3b82f6" }} />
+                        <UserCheck size={14} style={{ color: "var(--status-info)" }} />
                         <span>👤 Primary Approver</span>
                       </button>
 
@@ -396,7 +582,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           background: currentUser?.email === "backup@example.test" ? "var(--bg-subtle)" : "transparent",
                         }}
                       >
-                        <UserCheck size={14} style={{ color: "#d97706" }} />
+                        <UserCheck size={14} style={{ color: "var(--urgency-amber)" }} />
                         <span>🛡️ Backup Approver</span>
                       </button>
                     </>

@@ -3,7 +3,7 @@
 import React from "react";
 import { Receipt, FileText, Upload, RefreshCw, ExternalLink } from "lucide-react";
 import { BatchRecord, PaymentRecord } from "../../types";
-import { formatExactCurrency } from "../../lib/utils";
+import { formatExactCurrency, formatBatchId } from "../../lib/utils";
 
 type PaymentHistorySectionProps = {
   liveBatches: BatchRecord[];
@@ -45,7 +45,7 @@ export function PaymentHistorySection({
         {batchesWithPayments.map((batch) => (
           <div className="payment-review-batch" key={batch.id}>
             <div className="payment-batch-header">
-              <strong>Batch {batch.id.slice(0, 8)}</strong>
+              <strong>Batch {formatBatchId(batch.id)}</strong>
               <span className="status-tag">{batch.status ?? ""}</span>
             </div>
 

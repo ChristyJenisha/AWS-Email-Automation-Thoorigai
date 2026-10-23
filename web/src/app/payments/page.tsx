@@ -20,10 +20,11 @@ import {
 } from "lucide-react";
 import { useDataContext } from "../../lib/DataContext";
 import { BatchRecord, PaymentLineDraft, PaymentRecord, BillFilter } from "../../types";
-import { formatExactCurrency, matchesBillFilter } from "../../lib/utils";
+import { formatExactCurrency, matchesBillFilter, formatBatchId } from "../../lib/utils";
 import { authFetch, getApiBase, fetchPaymentsForBatch } from "../../lib/api";
 import { PaymentEntryModal } from "../../components/modals/PaymentEntryModal";
 import { BillsTable } from "../../components/tables/BillsTable";
+import { AIGradientBorder } from "../../components/ui";
 
 export default function PaymentsPage() {
   const {
@@ -473,7 +474,7 @@ export default function PaymentsPage() {
       await refreshData();
       await refreshPaymentRecords();
       setDeleteBatchId(null);
-      setNotice({ type: "success", message: `Batch ${batchId.slice(0, 8)} deleted successfully.` });
+      setNotice({ type: "success", message: `Batch ${formatBatchId(batchId)} deleted successfully.` });
     } catch (err) {
       setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to delete batch." });
     } finally {
@@ -489,7 +490,7 @@ export default function PaymentsPage() {
           <p className="eyebrow">ACCOUNTS RECEIVABLE & SETTLEMENTS</p>
           <h2>
             Bills & Payments{" "}
-            <span className="section-total">
+            <span className="shell-header-badge">
               {readyBatches.length} ready · {bills.length} bills total
             </span>
           </h2>
@@ -503,8 +504,8 @@ export default function PaymentsPage() {
               fontSize: 12,
               padding: "4px 10px",
               borderRadius: 6,
-              background: "var(--bg-subtle, #f1f5f9)",
-              color: "var(--text-muted, #64748b)",
+              background: "var(--bg-subtle)",
+              color: "var(--text-muted)",
             }}
           >
             <Lock size={13} />
@@ -521,27 +522,27 @@ export default function PaymentsPage() {
             alignItems: "center",
             justifyContent: "space-between",
             padding: "10px 14px",
-            borderRadius: "var(--radius-md, 8px)",
+            borderRadius: "var(--radius-md)",
             marginBottom: 20,
             fontSize: 13,
             background:
               notice.type === "success"
-                ? "var(--urgency-emerald-bg, #ecfdf5)"
+                ? "var(--brand-light)"
                 : notice.type === "error"
-                ? "var(--urgency-rose-bg, #fef2f2)"
-                : "#eff6ff",
+                ? "var(--urgency-rose-bg)"
+                : "var(--status-info-bg)",
             color:
               notice.type === "success"
-                ? "var(--urgency-emerald, #047857)"
+                ? "var(--brand-primary)"
                 : notice.type === "error"
-                ? "var(--urgency-rose, #be123c)"
-                : "#1d4ed8",
+                ? "var(--urgency-rose)"
+                : "var(--status-info-text)",
             border: `1px solid ${
               notice.type === "success"
-                ? "#a7f3d0"
+                ? "var(--brand-border)"
                 : notice.type === "error"
-                ? "#fecaca"
-                : "#bfdbfe"
+                ? "var(--urgency-rose-border)"
+                : "var(--status-info-border)"
             }`,
           }}
         >
@@ -578,68 +579,53 @@ export default function PaymentsPage() {
           marginBottom: 24,
         }}
       >
-        <div
-          style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-light)",
-            borderRadius: "var(--radius-md)",
-            padding: "16px 20px",
-          }}
-        >
-          <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
-            Ready for Payment
-          </span>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
-            <strong style={{ fontSize: 24, color: "var(--urgency-emerald, #047857)" }}>
-              {formatExactCurrency(readyTotalAmount)}
-            </strong>
-            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              ({readyBatches.length} batch{readyBatches.length === 1 ? "" : "es"})
+        <AIGradientBorder variant="success" duration={4}>
+          <div style={{ background: "var(--bg-surface)", padding: "16px 20px", width: "100%" }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+              Ready for Payment
             </span>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
+              <strong style={{ fontSize: 24, color: "var(--brand-primary)" }}>
+                {formatExactCurrency(readyTotalAmount)}
+              </strong>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                ({readyBatches.length} batch{readyBatches.length === 1 ? "" : "es"})
+              </span>
+            </div>
           </div>
-        </div>
+        </AIGradientBorder>
 
-        <div
-          style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-light)",
-            borderRadius: "var(--radius-md)",
-            padding: "16px 20px",
-          }}
-        >
-          <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
-            Settled History Recorded
-          </span>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
-            <strong style={{ fontSize: 24, color: "var(--text-primary)" }}>
-              {formatExactCurrency(settledTotalAmount)}
-            </strong>
-            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              ({batchesWithPayments.length} batch{batchesWithPayments.length === 1 ? "" : "es"})
+        <AIGradientBorder variant="ai" duration={5}>
+          <div style={{ background: "var(--bg-surface)", padding: "16px 20px", width: "100%" }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+              Settled History Recorded
             </span>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
+              <strong style={{ fontSize: 24, color: "var(--text-primary)" }}>
+                {formatExactCurrency(settledTotalAmount)}
+              </strong>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                ({batchesWithPayments.length} batch{batchesWithPayments.length === 1 ? "" : "es"})
+              </span>
+            </div>
           </div>
-        </div>
+        </AIGradientBorder>
 
-        <div
-          style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-light)",
-            borderRadius: "var(--radius-md)",
-            padding: "16px 20px",
-          }}
-        >
-          <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
-            Total Open Receivables
-          </span>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
-            <strong style={{ fontSize: 24, color: "var(--text-primary)" }}>
-              {formatExactCurrency(totalReceivables)}
-            </strong>
-            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              ({bills.length} bill{bills.length === 1 ? "" : "s"})
+        <AIGradientBorder variant="primary" duration={4.5}>
+          <div style={{ background: "var(--bg-surface)", padding: "16px 20px", width: "100%" }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+              Total Open Receivables
             </span>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
+              <strong style={{ fontSize: 24, color: "var(--text-primary)" }}>
+                {formatExactCurrency(totalReceivables)}
+              </strong>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                ({bills.length} bill{bills.length === 1 ? "" : "s"})
+              </span>
+            </div>
           </div>
-        </div>
+        </AIGradientBorder>
       </div>
 
       {/* Main Tabs Toolbar */}
@@ -659,13 +645,12 @@ export default function PaymentsPage() {
           type="button"
           role="tab"
           aria-selected={activeTab === "ready"}
-          className={`filter-tab ${activeTab === "ready" ? "selected" : ""}`}
+          className={`ui-payment-tab ${activeTab === "ready" ? "active" : ""}`}
           onClick={() => setActiveTab("ready")}
-          style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
         >
           <CreditCard size={15} />
           <span>Ready for Payment</span>
-          <span className="badge-count" style={{ marginLeft: 4 }}>
+          <span className="ui-tab-badge">
             {readyBatches.length}
           </span>
         </button>
@@ -674,13 +659,12 @@ export default function PaymentsPage() {
           type="button"
           role="tab"
           aria-selected={activeTab === "history"}
-          className={`filter-tab ${activeTab === "history" ? "selected" : ""}`}
+          className={`ui-payment-tab ${activeTab === "history" ? "active" : ""}`}
           onClick={() => setActiveTab("history")}
-          style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
         >
           <Receipt size={15} />
           <span>Settlement History & Proofs</span>
-          <span className="badge-count" style={{ marginLeft: 4 }}>
+          <span className="ui-tab-badge">
             {batchesWithPayments.length}
           </span>
         </button>
@@ -689,13 +673,12 @@ export default function PaymentsPage() {
           type="button"
           role="tab"
           aria-selected={activeTab === "bills"}
-          className={`filter-tab ${activeTab === "bills" ? "selected" : ""}`}
+          className={`ui-payment-tab ${activeTab === "bills" ? "active" : ""}`}
           onClick={() => setActiveTab("bills")}
-          style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
         >
           <FileText size={15} />
           <span>All Accounts Receivable Bills</span>
-          <span className="badge-count" style={{ marginLeft: 4 }}>
+          <span className="ui-tab-badge">
             {bills.length}
           </span>
         </button>
@@ -714,7 +697,7 @@ export default function PaymentsPage() {
                 textAlign: "center",
               }}
             >
-              <CheckCircle2 size={40} style={{ color: "var(--urgency-emerald, #047857)", marginBottom: 12 }} />
+              <CheckCircle2 size={40} style={{ color: "var(--brand-primary)", marginBottom: 12 }} />
               <h3 style={{ margin: "0 0 6px", color: "var(--text-primary)" }}>
                 No Batches Awaiting Payment
               </h3>
@@ -748,7 +731,7 @@ export default function PaymentsPage() {
                   <div className="payment-review-batch" key={batch.id}>
                     <div className="payment-batch-header">
                       <div>
-                        <strong>Batch {batch.id.slice(0, 8)}</strong>
+                        <strong>Batch {formatBatchId(batch.id)}</strong>
                         <span className="batch-verified-note" style={{ marginLeft: 12 }}>
                           ✓ All approval stages verified ({batch.bills?.length ?? 0} bills · Total {formatExactCurrency(batchTotal)})
                         </span>
@@ -802,13 +785,14 @@ export default function PaymentsPage() {
                     ))}
 
                     {/* Action Buttons */}
-                    <div className="payment-review-actions" style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                    <div className="payment-review-actions" style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
                       <button
                         className="secondary-button"
                         type="button"
                         disabled={!isAdmin}
                         onClick={() => openOnAccountEntry(batch)}
                         title={isAdmin ? "Record payment on account for later allocation" : "Admin access required"}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                       >
                         <PlusCircle size={14} />
                         <span>Record on account</span>
@@ -820,6 +804,7 @@ export default function PaymentsPage() {
                         disabled={!isAdmin}
                         onClick={() => openPaymentEntry(batch)}
                         title={isAdmin ? "Record bank payment and allocate to bills" : "Admin access required"}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                       >
                         <CreditCard size={14} />
                         <span>Record payment & allocate</span>
@@ -827,14 +812,36 @@ export default function PaymentsPage() {
 
                       {isAdmin && (
                         <button
-                          className="secondary-button danger-btn"
                           type="button"
                           onClick={() => setDeleteBatchId(batch.id)}
                           title="Delete this batch and its bills"
-                          style={{ marginLeft: "auto", borderColor: "#fca5a5", color: "#b91c1c" }}
+                          style={{
+                            marginLeft: "auto",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            padding: "6px 12px",
+                            borderRadius: 6,
+                            border: "1px solid var(--border-light)",
+                            background: "transparent",
+                            color: "var(--text-muted)",
+                            fontSize: 12,
+                            cursor: "pointer",
+                            transition: "all 120ms ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.color = "var(--urgency-rose)";
+                            e.currentTarget.style.borderColor = "var(--urgency-rose-border)";
+                            e.currentTarget.style.background = "var(--urgency-rose-bg)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.color = "var(--text-muted)";
+                            e.currentTarget.style.borderColor = "var(--border-light)";
+                            e.currentTarget.style.background = "transparent";
+                          }}
                         >
                           <Trash2 size={13} />
-                          <span>Delete Batch</span>
+                          <span>Delete</span>
                         </button>
                       )}
                     </div>
@@ -875,7 +882,7 @@ export default function PaymentsPage() {
                   <div className="payment-review-batch" key={batch.id}>
                     <div className="payment-batch-header">
                       <div>
-                        <strong>Batch {batch.id.slice(0, 8)}</strong>
+                        <strong>Batch {formatBatchId(batch.id)}</strong>
                         <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: 8 }}>
                           ({payments.length} payment record{payments.length === 1 ? "" : "s"})
                         </span>
@@ -896,7 +903,7 @@ export default function PaymentsPage() {
                               : ""}
                           </span>
                           {Number(payment.unallocatedAmount) > 0 && (
-                            <span className="unallocated-text" style={{ color: "var(--urgency-amber, #b45309)", fontSize: 11.5 }}>
+                            <span className="unallocated-text" style={{ color: "var(--urgency-amber)", fontSize: 11.5 }}>
                               {formatExactCurrency(Number(payment.unallocatedAmount))} remains unallocated
                             </span>
                           )}
@@ -1014,10 +1021,10 @@ export default function PaymentsPage() {
           >
             <div className="dialog-heading">
               <div>
-                <p className="eyebrow" style={{ color: "var(--urgency-rose, #be123c)" }}>
+                <p className="eyebrow" style={{ color: "var(--urgency-rose)" }}>
                   CONFIRM BATCH DELETION
                 </p>
-                <h2 id="delete-batch-title">Delete Batch {deleteBatchId.slice(0, 8)}?</h2>
+                <h2 id="delete-batch-title">Delete Batch {formatBatchId(deleteBatchId)}?</h2>
               </div>
             </div>
 
@@ -1039,7 +1046,7 @@ export default function PaymentsPage() {
                 className="primary-button danger-btn"
                 disabled={isDeletingBatch}
                 onClick={() => void handleDeleteBatch(deleteBatchId)}
-                style={{ background: "#dc2626", borderColor: "#dc2626", color: "#ffffff" }}
+                style={{ background: "var(--urgency-rose)", borderColor: "var(--urgency-rose)", color: "var(--text-inverse)" }}
               >
                 {isDeletingBatch ? "Deleting..." : "Permanently Delete"}
               </button>

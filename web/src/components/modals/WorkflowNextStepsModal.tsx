@@ -3,7 +3,7 @@
 import React from "react";
 import { X, CheckCircle2, ArrowRight, ExternalLink, ShieldCheck, Mail, CreditCard, Clock, FileCheck } from "lucide-react";
 import { BatchRecord } from "../../types";
-import { formatCurrency } from "../../lib/utils";
+import { formatCurrency, formatBatchId } from "../../lib/utils";
 
 type WorkflowNextStepsModalProps = {
   isOpen: boolean;
@@ -36,7 +36,7 @@ export function WorkflowNextStepsModal({
 
   const totalAmount = amount ?? (batch.bills ?? []).reduce((sum, b) => sum + Number(b.amount ?? 0), 0);
   const isSingleBill = (batch.bills?.length ?? 1) === 1 || Boolean(billNumber);
-  const displayBillNumber = billNumber || batch.bills?.[0]?.billNumber || `Batch ${batch.id.slice(0, 8)}`;
+  const displayBillNumber = billNumber || batch.bills?.[0]?.billNumber || `Batch ${formatBatchId(batch.id)}`;
 
   return (
     <div
@@ -56,7 +56,7 @@ export function WorkflowNextStepsModal({
             <span className="eyebrow-badge">SUBMISSION CONFIRMED</span>
             <h2 id="next-steps-title" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
               <CheckCircle2 size={22} className="text-forest" />
-              <span>{isSingleBill ? `Bill ${displayBillNumber} Submitted!` : `Batch ${batch.id.slice(0, 8)} Created!`}</span>
+              <span>{isSingleBill ? `Bill ${displayBillNumber} Submitted!` : `Batch ${formatBatchId(batch.id)} Created!`}</span>
             </h2>
           </div>
           <button className="dialog-close" type="button" onClick={onClose} aria-label="Close dialog">

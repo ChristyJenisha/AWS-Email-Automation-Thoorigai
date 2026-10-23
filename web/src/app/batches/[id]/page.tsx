@@ -10,7 +10,7 @@ import {
 import { useDataContext } from "../../../lib/DataContext";
 import { authFetch, getApiBase } from "../../../lib/api";
 import { BatchHistoryRecord } from "../../../types";
-import { formatCurrency } from "../../../lib/utils";
+import { formatCurrency, formatBatchId } from "../../../lib/utils";
 import { Badge } from "../../../components/ui";
 
 export default function BatchDetailPage({
@@ -121,7 +121,7 @@ export default function BatchDetailPage({
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
             <span style={{ fontFamily: "monospace", fontSize: 18, fontWeight: 700 }}>
-              Batch #{history.id.slice(0, 8)}
+              Batch {formatBatchId(history.id)}
             </span>
             <Badge
               variant={

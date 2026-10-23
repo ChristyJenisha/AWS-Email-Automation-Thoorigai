@@ -14,7 +14,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { AppUser, BatchRecord, PaymentRecord } from "../../types";
-import { formatExactCurrency } from "../../lib/utils";
+import { formatExactCurrency, formatBatchId } from "../../lib/utils";
 
 type SettlementsHubProps = {
   liveBatches: BatchRecord[];
@@ -96,7 +96,7 @@ export function SettlementsHub({
               <div className="payment-review-batch" key={batch.id}>
                 <div className="payment-batch-header">
                   <div>
-                    <strong>Batch {batch.id.slice(0, 8)}</strong>
+                    <strong>Batch {formatBatchId(batch.id)}</strong>
                     <span className="batch-verified-note">
                       ✓ All approval stages verified ({batch.bills?.length ?? 0} bills)
                     </span>
@@ -190,7 +190,7 @@ export function SettlementsHub({
             batchesWithPayments.map((batch) => (
               <div className="payment-review-batch" key={batch.id}>
                 <div className="payment-batch-header">
-                  <strong>Batch {batch.id.slice(0, 8)}</strong>
+                  <strong>Batch {formatBatchId(batch.id)}</strong>
                   <span className="status-tag">{batch.status ?? ""}</span>
                 </div>
 

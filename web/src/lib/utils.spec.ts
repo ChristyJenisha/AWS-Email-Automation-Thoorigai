@@ -5,6 +5,8 @@ import {
   isApproverRoute,
   filterBatches,
   sortBatches,
+  formatBatchId,
+  formatStageDuration,
 } from "./utils";
 import { BatchRecord } from "../types";
 
@@ -214,5 +216,52 @@ describe("sortBatches", () => {
   it("sorts by bills count descending and ascending", () => {
     const desc = sortBatches(sampleBatches, "bills", "desc");
     expect(desc[0].id).toBe("batch-b"); // 2 bills
+  });
+});
+
+describe("formatBatchId", () => {
+  it("handles null, undefined, or empty ids safely", () => {
+    expect(formatBatchId(null)).toBe("");
+    expect(formatBatchId(undefined)).toBe("");
+    expect(formatBatchId("")).toBe("");
+  });
+
+  it("extracts the last 6 characters uppercase and prefixes with B-", () => {
+    expect(formatBatchId("cmvgc000a0001xyz")).toBe("B-001XYZ");
+    expect(formatBatchId("cmvgc000a0002abc")).toBe("B-002ABC");
+    expect(formatBatchId("batch-123456")).toBe("B-123456");
+    expect(formatBatchId("demo-batch")).toBe("B-DEMO-01");
+  });
+
+  it("handles short ids smaller than 6 characters gracefully", () => {
+    expect(formatBatchId("b42")).toBe("B-B42");
+  });
+});
+
+describe("formatStageDuration", () => {
+  const baseNow = new Date("2026-10-22T12:00:00Z").getTime();
+
+  it("handles null, undefined, or empty timestamps safely", () => {
+    expect(formatStageDuration(null, baseNow)).toBe("Just started");
+    expect(formatStageDuration(undefined, baseNow)).toBe("Just started");
+    expect(formatStageDuration("", baseNow)).toBe("Just started");
+  });
+
+  it("formats durations less than 1 hour", () => {
+    const twentyMinsAgo = new Date(baseNow - 20 * 60 * 1000).toISOString();
+    expect(formatStageDuration(twentyMinsAgo, baseNow)).toBe("< 1h in stage");
+  });
+
+  it("formats durations in hours under 24h", () => {
+    const fiveHoursAgo = new Date(baseNow - 5 * 3600 * 1000).toISOString();
+    expect(formatStageDuration(fiveHoursAgo, baseNow)).toBe("5h in stage");
+  });
+
+  it("formats durations in days and hours over 24h", () => {
+    const twoDaysThreeHoursAgo = new Date(baseNow - (48 + 3) * 3600 * 1000).toISOString();
+    expect(formatStageDuration(twoDaysThreeHoursAgo, baseNow)).toBe("2d 3h in stage");
+
+    const exactTwoDaysAgo = new Date(baseNow - 48 * 3600 * 1000).toISOString();
+    expect(formatStageDuration(exactTwoDaysAgo, baseNow)).toBe("2d in stage");
   });
 });

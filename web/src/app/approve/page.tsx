@@ -460,7 +460,7 @@ export default function ApprovalPage() {
                       </td>
                       <td>{formatCurrency(bill.amount)}</td>
                       <td>
-                        <strong style={{ color: "#0f766e" }}>{formatCurrency(bill.balanceDue)}</strong>
+                        <strong style={{ color: "var(--brand-primary)" }}>{formatCurrency(bill.balanceDue)}</strong>
                       </td>
                       <td>{bill.dueDate ? new Date(bill.dueDate).toLocaleDateString() : "Immediate"}</td>
                       <td>
@@ -508,28 +508,28 @@ export default function ApprovalPage() {
         {/* 2. COMPLETED STAGE NOTICE PANEL (Shown when opening a previously completed stage link) */}
         {!isLoading && !verifiedAction && details && details.status === "COMPLETED" && (
           <section className="approval-panel" aria-labelledby="completed-stage-title">
-            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: 24, marginBottom: 20 }}>
+            <div style={{ background: "var(--brand-light)", border: "1px solid var(--brand-border)", borderRadius: "var(--radius-lg)", padding: 24, marginBottom: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                <CheckCircle2 size={24} style={{ color: "#16a34a" }} />
-                <h2 id="completed-stage-title" style={{ margin: 0, fontSize: "1.25rem", color: "#14532d", fontWeight: 700 }}>
+                <CheckCircle2 size={24} style={{ color: "var(--brand-primary)" }} />
+                <h2 id="completed-stage-title" style={{ margin: 0, fontSize: "1.25rem", color: "var(--brand-primary)", fontWeight: 700 }}>
                   Stage {details.stageOrder} Has Already Been Approved
                 </h2>
               </div>
-              <p style={{ margin: "0 0 16px 0", fontSize: "0.95rem", color: "#166534", lineHeight: 1.5 }}>
+              <p style={{ margin: "0 0 16px 0", fontSize: "0.95rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
                 This approval link is for Stage {details.stageOrder}, which was previously authorized and marked as complete.
               </p>
 
               {details.activeStage ? (
-                <div style={{ background: "#ffffff", border: "1px solid #86efac", borderRadius: 8, padding: 18, marginTop: 12 }}>
+                <div style={{ background: "var(--bg-surface)", border: "1px solid var(--brand-border)", borderRadius: "var(--radius-lg)", padding: 18, marginTop: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                     <div>
                       <span className="status-pill status-alerted" style={{ marginBottom: 6, display: "inline-flex" }}>
                         <Clock size={12} /> Stage {details.activeStage.order} In Progress
                       </span>
-                      <h3 style={{ margin: "4px 0", fontSize: "1.05rem", color: "#0f172a" }}>
+                      <h3 style={{ margin: "4px 0", fontSize: "1.05rem", color: "var(--text-primary)" }}>
                         Currently Awaiting Approval from {details.activeStage.approverName}
                       </h3>
-                      <p style={{ margin: 0, fontSize: "0.88rem", color: "#475569" }}>
+                      <p style={{ margin: 0, fontSize: "0.88rem", color: "var(--text-secondary)" }}>
                         Notification and verification code sent to: <strong>{details.activeStage.approverEmail}</strong>
                       </p>
                     </div>
@@ -553,8 +553,8 @@ export default function ApprovalPage() {
                   </div>
                 </div>
               ) : (
-                <div style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: 8, padding: 16, marginTop: 12 }}>
-                  <p style={{ margin: 0, fontSize: "0.92rem", color: "#334155", fontWeight: 600 }}>
+                <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-light)", borderRadius: "var(--radius-lg)", padding: 16, marginTop: 12 }}>
+                  <p style={{ margin: 0, fontSize: "0.92rem", color: "var(--text-primary)", fontWeight: 600 }}>
                     ✓ All stages are complete! This batch is currently <strong>Ready for Payment</strong>.
                   </p>
                 </div>
@@ -562,7 +562,7 @@ export default function ApprovalPage() {
             </div>
 
             {/* Bills Breakdown */}
-            <h3 style={{ fontSize: "0.95rem", color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 20 }}>
+            <h3 style={{ fontSize: "0.95rem", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 20 }}>
               Bills in this Batch ({details.bills.length})
             </h3>
             <table className="approval-bills">
@@ -580,7 +580,7 @@ export default function ApprovalPage() {
                   <tr key={bill.billNumber}>
                     <td><strong>{bill.billNumber}</strong></td>
                     <td>{formatCurrency(bill.amount)}</td>
-                    <td><strong style={{ color: "#0f766e" }}>{formatCurrency(bill.balanceDue)}</strong></td>
+                    <td><strong style={{ color: "var(--brand-primary)" }}>{formatCurrency(bill.balanceDue)}</strong></td>
                     <td>{bill.dueDate ? new Date(bill.dueDate).toLocaleDateString() : "Immediate"}</td>
                     <td>
                       <span className="status-pill status-connected">
@@ -617,53 +617,53 @@ export default function ApprovalPage() {
 
             {/* OTP Security Verification Step */}
             {!isOtpVerified && (
-              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 18, margin: "20px 0" }}>
-                <h3 style={{ margin: "0 0 8px 0", fontSize: "1.05rem", color: "#0f172a", display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ background: "var(--bg-subtle)", border: "1px solid var(--border-light)", borderRadius: "var(--radius-lg)", padding: 18, margin: "20px 0" }}>
+                <h3 style={{ margin: "0 0 8px 0", fontSize: "1.05rem", color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 8 }}>
                   <ShieldCheck size={18} className="text-forest" />
                   <span>Identity Verification</span>
                 </h3>
-                <p style={{ margin: "0 0 12px 0", fontSize: "0.88rem", color: "#475569" }}>
+                <p style={{ margin: "0 0 12px 0", fontSize: "0.88rem", color: "var(--text-secondary)" }}>
                   To ensure authorization security, please enter the 6-digit verification code sent to your registered approver email.
                 </p>
 
                 {devCode && (
                   <div
                     style={{
-                      background: "linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)",
-                      border: "1px solid #6ee7b7",
+                      background: "var(--brand-light)",
+                      border: "1px solid var(--brand-border)",
                       padding: "14px 18px",
-                      borderRadius: 8,
+                      borderRadius: "var(--radius-lg)",
                       marginBottom: 16,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
                       flexWrap: "wrap",
                       gap: 12,
-                      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+                      boxShadow: "var(--shadow-sm)",
                     }}
                   >
                     <div>
-                      <div style={{ fontSize: "0.85rem", color: "#065f46", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ fontSize: "0.85rem", color: "var(--brand-primary)", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
                         <Sparkles size={14} />
                         <span>Instant Verification Code (Demo / Simulation Mode)</span>
                       </div>
-                      <div style={{ marginTop: 4, fontSize: "0.82rem", color: "#047857" }}>
+                      <div style={{ marginTop: 4, fontSize: "0.82rem", color: "var(--brand-primary)" }}>
                         Code:{" "}
                         <code
                           style={{
                             fontSize: "1.15rem",
                             fontWeight: "bold",
                             letterSpacing: 3,
-                            background: "#ffffff",
-                            border: "1px solid #a7f3d0",
+                            background: "var(--bg-surface)",
+                            border: "1px solid var(--brand-border)",
                             padding: "2px 10px",
                             borderRadius: 4,
-                            color: "#065f46",
+                            color: "var(--brand-primary)",
                           }}
                         >
                           {devCode}
                         </code>
-                        <span style={{ marginLeft: 8, color: "#64748b", fontSize: "0.78rem" }}>
+                        <span style={{ marginLeft: 8, color: "var(--text-muted)", fontSize: "0.78rem" }}>
                           (Simulated locally; no external email needed)
                         </span>
                       </div>
@@ -678,8 +678,8 @@ export default function ApprovalPage() {
                           display: "inline-flex",
                           alignItems: "center",
                           gap: 6,
-                          background: "#059669",
-                          borderColor: "#059669",
+                          background: "var(--brand-primary)",
+                          borderColor: "var(--brand-primary)",
                         }}
                         disabled={isVerifyingOtp || isSubmitting}
                         onClick={() => void quickVerifyAndApprove()}
@@ -695,7 +695,7 @@ export default function ApprovalPage() {
                         style={{
                           fontSize: "0.82rem",
                           padding: "6px 12px",
-                          background: "#ffffff",
+                          background: "var(--bg-surface)",
                         }}
                         onClick={() => {
                           setOtpCode(devCode);
@@ -721,7 +721,7 @@ export default function ApprovalPage() {
                         void verifyOtp(val);
                       }
                     }}
-                    style={{ padding: "8px 12px", fontSize: "1.1rem", letterSpacing: 4, width: 170, textAlign: "center", border: "1px solid #cbd5e1", borderRadius: 6 }}
+                    style={{ padding: "8px 12px", fontSize: "1.1rem", letterSpacing: 4, width: 170, textAlign: "center", border: "1px solid var(--border-strong)", borderRadius: 6 }}
                   />
                   <button
                     className="primary-button"
@@ -746,7 +746,7 @@ export default function ApprovalPage() {
             )}
 
             {/* Bills Breakdown with Status in Process */}
-            <h3 style={{ fontSize: "0.95rem", color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 20 }}>
+            <h3 style={{ fontSize: "0.95rem", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 20 }}>
               Bills in this Batch ({details.bills.length})
             </h3>
             <table className="approval-bills">
@@ -764,7 +764,7 @@ export default function ApprovalPage() {
                   <tr key={bill.billNumber}>
                     <td><strong>{bill.billNumber}</strong></td>
                     <td>{formatCurrency(bill.amount)}</td>
-                    <td><strong style={{ color: "#0f766e" }}>{formatCurrency(bill.balanceDue)}</strong></td>
+                    <td><strong style={{ color: "var(--brand-primary)" }}>{formatCurrency(bill.balanceDue)}</strong></td>
                     <td>{bill.dueDate ? new Date(bill.dueDate).toLocaleDateString() : "Immediate"}</td>
                     <td>
                       <span className={`status-pill ${isOtpVerified ? "status-ready" : "status-alerted"}`}>
@@ -783,9 +783,9 @@ export default function ApprovalPage() {
 
             {/* Actions Panel - Unlocked only after OTP */}
             {isOtpVerified ? (
-              <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #e2e8f0" }}>
+              <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--border-light)" }}>
                 <div style={{ marginBottom: 12 }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.82rem", fontWeight: 650, color: "#475569", marginBottom: 6, textTransform: "uppercase" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.82rem", fontWeight: 650, color: "var(--text-secondary)", marginBottom: 6, textTransform: "uppercase" }}>
                     <Tag size={13} /> Return reason presets:
                   </span>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -808,7 +808,7 @@ export default function ApprovalPage() {
                   </div>
                 </div>
 
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "#334155", marginBottom: 6 }} htmlFor="approval-comment">
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: 6 }} htmlFor="approval-comment">
                   Approval Notes / Return Correction Details
                 </label>
                 <textarea
@@ -836,7 +836,7 @@ export default function ApprovalPage() {
                     type="button"
                     disabled={isSubmitting}
                     onClick={() => void submitAction("return")}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 6, borderColor: "#fca5a5", color: "#b91c1c" }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, borderColor: "var(--urgency-rose-border)", color: "var(--urgency-rose)" }}
                   >
                     <RotateCcw size={14} />
                     <span>Return for revision</span>
@@ -854,7 +854,7 @@ export default function ApprovalPage() {
                 </div>
               </div>
             ) : (
-              <p style={{ marginTop: 16, fontSize: "0.85rem", color: "#64748b", fontStyle: "italic", display: "flex", alignItems: "center", gap: 6 }}>
+              <p style={{ marginTop: 16, fontSize: "0.85rem", color: "var(--text-muted)", fontStyle: "italic", display: "flex", alignItems: "center", gap: 6 }}>
                 <AlertTriangle size={15} />
                 <span>Complete the 6-digit email OTP verification above to unlock Approve, Return, and Reassign actions.</span>
               </p>
@@ -876,30 +876,30 @@ export default function ApprovalPage() {
                 padding: 16,
               }}>
                 <div style={{
-                  background: "#fff",
-                  borderRadius: 12,
+                  background: "var(--bg-surface)",
+                  borderRadius: "var(--radius-xl)",
                   maxWidth: 480,
                   width: "100%",
                   padding: 24,
-                  boxShadow: "0 20px 25px -5px rgba(0,0,0,0.2)",
+                  boxShadow: "var(--shadow-lg)",
                 }}>
-                  <h3 style={{ margin: "0 0 8px 0", fontSize: "1.2rem", color: "#0f172a" }}>Request Step Reassignment</h3>
-                  <p style={{ margin: "0 0 16px 0", fontSize: "0.88rem", color: "#64748b" }}>
+                  <h3 style={{ margin: "0 0 8px 0", fontSize: "1.2rem", color: "var(--text-primary)" }}>Request Step Reassignment</h3>
+                  <p style={{ margin: "0 0 16px 0", fontSize: "0.88rem", color: "var(--text-muted)" }}>
                     If you are unavailable or not the correct person for this stage, flag this batch for the Client Administrator to reassign.
                   </p>
 
-                  <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "#334155", marginBottom: 4 }}>
-                    Reason for Reassignment <span style={{ color: "#e11d48" }}>*</span>
+                  <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
+                    Reason for Reassignment <span style={{ color: "var(--urgency-rose)" }}>*</span>
                   </label>
                   <textarea
                     rows={3}
                     placeholder="e.g. On extended leave, out of office, or transferred to another team"
                     value={reassignReason}
                     onChange={(e) => setReassignReason(e.target.value)}
-                    style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 14 }}
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", marginBottom: 14 }}
                   />
 
-                  <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "#334155", marginBottom: 4 }}>
+                  <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
                     Suggested Replacement Email (Optional)
                   </label>
                   <input
@@ -907,7 +907,7 @@ export default function ApprovalPage() {
                     placeholder="e.g. colleague@example.com"
                     value={reassignEmail}
                     onChange={(e) => setReassignEmail(e.target.value)}
-                    style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 20 }}
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", marginBottom: 20 }}
                   />
 
                   <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>

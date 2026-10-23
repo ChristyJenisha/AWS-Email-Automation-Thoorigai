@@ -3,7 +3,7 @@
 import React from "react";
 import { History, Trash2, Clock, CheckCircle, AlertTriangle } from "lucide-react";
 import { AppUser, BatchRecord } from "../../types";
-import { formatCurrency } from "../../lib/utils";
+import { formatCurrency, formatBatchId } from "../../lib/utils";
 
 type BatchFilterType = "ALL" | "IN_PROGRESS" | "READY_FOR_PAYMENT" | "COMPLETED";
 
@@ -106,7 +106,7 @@ export function BatchesTable({
                 return (
                   <tr key={batch.id}>
                     <td>
-                      <span className="batch-id-tag">Batch {batch.id.slice(0, 8)}</span>
+                      <span className="batch-id-tag">Batch {formatBatchId(batch.id)}</span>
                     </td>
                     <td>
                       <span className="stage-info">

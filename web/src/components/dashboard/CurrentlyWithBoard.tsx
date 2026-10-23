@@ -21,7 +21,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { AppUser, BatchRecord, ContactRecord, StepInstanceRecord } from "../../types";
-import { formatCurrency, formatExactCurrency } from "../../lib/utils";
+import { formatCurrency, formatExactCurrency, formatBatchId } from "../../lib/utils";
 
 type CurrentlyWithBoardProps = {
   liveBatches: BatchRecord[];
@@ -176,7 +176,7 @@ export function CurrentlyWithBoard({
               <div className="card-top-row">
                 <div>
                   <span className="batch-id-badge">
-                    {(batch.bills?.length ?? 0) === 1 ? `Bill ${batch.bills?.[0]?.billNumber}` : `Batch ${batch.id.slice(0, 8)}`}
+                    {(batch.bills?.length ?? 0) === 1 ? `Bill ${batch.bills?.[0]?.billNumber}` : `Batch ${formatBatchId(batch.id)}`}
                   </span>
                   {(batch.bills?.length ?? 0) === 1 ? (
                     <span className="batch-type-pill single">Single Bill</span>
@@ -537,7 +537,7 @@ export function CurrentlyWithBoard({
                           type="button"
                           onClick={() => void onDeleteBatch(batch.id)}
                           title="Delete this batch and all its bills"
-                          style={{ borderColor: "#fca5a5", color: "#b91c1c" }}
+                          style={{ borderColor: "var(--urgency-rose-border)", color: "var(--urgency-rose)" }}
                         >
                           <Trash2 size={13} />
                           <span>Delete Batch</span>

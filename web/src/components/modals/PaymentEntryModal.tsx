@@ -3,7 +3,7 @@
 import React, { FormEvent } from "react";
 import { X, CreditCard, CheckCircle2 } from "lucide-react";
 import { BatchRecord, PaymentLineDraft, PaymentRecord } from "../../types";
-import { formatExactCurrency } from "../../lib/utils";
+import { formatExactCurrency, formatBatchId } from "../../lib/utils";
 
 type PaymentEntryModalProps = {
   isOpen: boolean;
@@ -69,7 +69,7 @@ export function PaymentEntryModal({
       >
         <div className="dialog-heading">
           <div>
-            <p className="eyebrow">BATCH {paymentBatch?.id?.slice(0, 8)}</p>
+            <p className="eyebrow">BATCH {formatBatchId(paymentBatch?.id)}</p>
             <h2 id="payment-dialog-title">
               {onAccountPaymentId
                 ? "Allocate on-account payment"

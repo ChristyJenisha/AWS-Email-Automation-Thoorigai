@@ -435,8 +435,8 @@ export default function SettingsPage() {
                 fontSize: 12,
                 padding: "4px 10px",
                 borderRadius: 6,
-                background: "var(--bg-subtle, #f1f5f9)",
-                color: "var(--text-muted, #64748b)",
+                background: "var(--bg-subtle)",
+                color: "var(--text-muted)",
               }}
             >
               <Lock size={13} />
@@ -454,12 +454,12 @@ export default function SettingsPage() {
             alignItems: "center",
             justifyContent: "space-between",
             padding: "10px 16px",
-            borderRadius: "var(--radius-md, 6px)",
+            borderRadius: "var(--radius-md)",
             fontSize: 13,
             marginBottom: 20,
-            background: notice.type === "success" ? "var(--brand-light, #ecfdf5)" : "#fff1f2",
-            color: notice.type === "success" ? "var(--brand-primary, #047857)" : "var(--urgency-rose, #be123c)",
-            border: `1px solid ${notice.type === "success" ? "var(--brand-border, #a7f3d0)" : "#fecdd3"}`,
+            background: notice.type === "success" ? "var(--brand-light)" : "var(--urgency-rose-bg)",
+            color: notice.type === "success" ? "var(--brand-primary)" : "var(--urgency-rose)",
+            border: `1px solid ${notice.type === "success" ? "var(--brand-border)" : "var(--urgency-rose-border)"}`,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1111,7 +1111,7 @@ export default function SettingsPage() {
                         borderRadius: "var(--radius-md)",
                         border: "1px solid var(--border-light)",
                         fontSize: 12.5,
-                        background: "#fff",
+                        background: "var(--bg-surface)",
                       }}
                     >
                       <option value="">Select contact...</option>
@@ -1133,7 +1133,7 @@ export default function SettingsPage() {
                         borderRadius: "var(--radius-md)",
                         border: "1px solid var(--border-light)",
                         fontSize: 12.5,
-                        background: "#fff",
+                        background: "var(--bg-surface)",
                       }}
                     >
                       <option value="">None (Optional)</option>
@@ -1164,7 +1164,7 @@ export default function SettingsPage() {
                         borderRadius: "var(--radius-md)",
                         border: "1px solid var(--border-light)",
                         fontSize: 12.5,
-                        background: "#fff",
+                        background: "var(--bg-surface)",
                       }}
                     />
                   </label>
@@ -1184,7 +1184,7 @@ export default function SettingsPage() {
                         borderRadius: "var(--radius-md)",
                         border: "1px solid var(--border-light)",
                         fontSize: 12.5,
-                        background: "#fff",
+                        background: "var(--bg-surface)",
                       }}
                     />
                   </label>
@@ -1298,7 +1298,7 @@ export default function SettingsPage() {
                         borderRadius: "var(--radius-md)",
                         border: "1px solid var(--border-light)",
                         fontSize: 12.5,
-                        background: "#fff",
+                        background: "var(--bg-surface)",
                       }}
                     >
                       <option value="">Select contact...</option>
@@ -1320,7 +1320,7 @@ export default function SettingsPage() {
                         borderRadius: "var(--radius-md)",
                         border: "1px solid var(--border-light)",
                         fontSize: 12.5,
-                        background: "#fff",
+                        background: "var(--bg-surface)",
                       }}
                     >
                       <option value="">None (Optional)</option>
@@ -1351,7 +1351,7 @@ export default function SettingsPage() {
                         borderRadius: "var(--radius-md)",
                         border: "1px solid var(--border-light)",
                         fontSize: 12.5,
-                        background: "#fff",
+                        background: "var(--bg-surface)",
                       }}
                     />
                   </label>
@@ -1371,7 +1371,7 @@ export default function SettingsPage() {
                         borderRadius: "var(--radius-md)",
                         border: "1px solid var(--border-light)",
                         fontSize: 12.5,
-                        background: "#fff",
+                        background: "var(--bg-surface)",
                       }}
                     />
                   </label>

@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Clock,
@@ -15,15 +16,26 @@ import {
   CheckCircle,
   Search,
   Filter,
+  BellRing,
+  ChevronDown,
+  Eye,
+  TrendingUp,
 } from "lucide-react";
 import { useDataContext } from "../lib/DataContext";
-import { formatCurrency, isValidConfirmNote, compareActiveBatchesUrgency } from "../lib/utils";
+import {
+  formatCurrency,
+  isValidConfirmNote,
+  compareActiveBatchesUrgency,
+  formatBatchId,
+} from "../lib/utils";
 import {
   Badge,
   Button,
   MetricCard,
   ModalDialog,
   SlideOverSheet,
+  ActionDropdown,
+  AIGradientBorder,
 } from "../components/ui";
 import { BatchHistoryRecord, BatchRecord, StepInstanceRecord } from "../types";
 import { authFetch, getApiBase } from "../lib/api";
@@ -36,6 +48,7 @@ function getTimeGreeting(date: Date = new Date()): string {
 }
 
 export default function CommandCenterPage() {
+  const router = useRouter();
   const {
     batches,
     contacts,
@@ -84,6 +97,19 @@ export default function CommandCenterPage() {
   // Notice Banner
   const [feedbackNotice, setFeedbackNotice] = useState<string | null>(null);
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Active batches sorted deterministically by urgency
   const sortedActiveBatches = useMemo(() => {
     return batches
@@ -107,6 +133,16 @@ export default function CommandCenterPage() {
       })
       .sort(compareActiveBatchesUrgency);
   }, [batches, searchQuery, approverFilter]);
+
+  // Total monetary value across active batches in flight
+  const activePipelineValue = useMemo(() => {
+    return batches
+      .filter((b) => b.status === "IN_PROGRESS" || b.status === "RETURNED")
+      .reduce((total, b) => {
+        const batchTotal = (b.bills ?? []).reduce((sum, bill) => sum + Number(bill.amount ?? 0), 0);
+        return total + batchTotal;
+      }, 0);
+  }, [batches]);
 
   // Open Approval Magic Link
   const handleOpenMagicLink = async (stepId: string) => {
@@ -164,7 +200,7 @@ export default function CommandCenterPage() {
       setConfirmModalTarget(null);
       setConfirmNote("");
       setFeedbackNotice(
-        `Batch ${confirmModalTarget.batch.id.slice(0, 8)} confirmed on behalf of approver. Forwarded to next stage.`
+        `Batch ${formatBatchId(confirmModalTarget.batch.id)} confirmed on behalf of approver. Forwarded to next stage.`
       );
       await refreshData();
     } catch (err) {
@@ -292,14 +328,28 @@ export default function CommandCenterPage() {
         </div>
       )}
 
-      {/* KPI Cards Row */}
+      {/* KPI Cards Row - Material Dashboard Floating Gradients */}
       <div className="metrics-grid" style={{ marginBottom: 24 }}>
+        <MetricCard
+          title="Active in Flight"
+          value={inFlightCount}
+          subtitle="Currently with approvers"
+          icon={<Clock size={20} />}
+          urgency="primary"
+          badge={
+            inFlightCount > 0 ? (
+              <Badge variant="info">
+                In Progress
+              </Badge>
+            ) : undefined
+          }
+        />
         <MetricCard
           title="Overdue / Critical"
           value={overdueCount}
-          subtitle="Pending > 24 hours or Escalated"
-          icon={<AlertTriangle size={16} />}
-          urgency={overdueCount > 0 ? "urgent" : "normal"}
+          subtitle="Pending > 24h or Escalated"
+          icon={<AlertTriangle size={20} />}
+          urgency="urgent"
           badge={
             overdueCount > 0 ? (
               <Badge variant="urgent" icon={<AlertTriangle size={11} />}>
@@ -309,18 +359,11 @@ export default function CommandCenterPage() {
           }
         />
         <MetricCard
-          title="Active in Flight"
-          value={inFlightCount}
-          subtitle="Currently with approvers"
-          icon={<Clock size={16} />}
-          urgency="normal"
-        />
-        <MetricCard
           title="Ready for Payment"
           value={readyForPaymentCount}
           subtitle="All approval stages completed"
-          icon={<CreditCard size={16} />}
-          urgency={readyForPaymentCount > 0 ? "success" : "normal"}
+          icon={<CreditCard size={20} />}
+          urgency="success"
           badge={
             readyForPaymentCount > 0 ? (
               <Badge variant="success" icon={<CheckCircle size={11} />}>
@@ -329,27 +372,36 @@ export default function CommandCenterPage() {
             ) : undefined
           }
         />
+        <MetricCard
+          title="Pipeline Value"
+          value={formatCurrency(activePipelineValue)}
+          subtitle="Across active in-flight batches"
+          icon={<TrendingUp size={20} />}
+          urgency="info"
+        />
       </div>
 
       {/* Filter / Search Bar */}
       <div
         style={{
           display: "flex",
+          flexWrap: "wrap",
           alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
-          padding: "12px 16px",
+          padding: "10px 16px",
           background: "var(--bg-surface)",
           border: "1px solid var(--border-light)",
           borderRadius: "var(--radius-lg)",
           marginBottom: 16,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, maxWidth: 360 }}>
-          <Search size={15} style={{ color: "var(--text-muted)" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "1 1 260px", maxWidth: 400, position: "relative" }}>
+          <Search size={15} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
           <input
+            ref={searchInputRef}
             type="text"
-            placeholder="Search by batch ID or invoice number..."
+            placeholder="Search by batch ID or invoice... (⌘K)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -358,62 +410,90 @@ export default function CommandCenterPage() {
               outline: "none",
               background: "transparent",
               fontSize: 13,
-            }}
-          />
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Filter size={14} style={{ color: "var(--text-muted)" }} />
-          <select
-            value={approverFilter}
-            onChange={(e) => setApproverFilter(e.target.value)}
-            style={{
-              padding: "5px 10px",
-              borderRadius: "var(--radius-md)",
-              border: "1px solid var(--border-light)",
-              background: "var(--bg-surface)",
-              fontSize: 12,
               color: "var(--text-primary)",
             }}
+          />
+          <kbd
+            style={{
+              fontSize: 10,
+              padding: "2px 6px",
+              borderRadius: 4,
+              border: "1px solid var(--border-light)",
+              background: "var(--bg-subtle)",
+              color: "var(--text-muted)",
+              fontFamily: "monospace",
+              flexShrink: 0,
+            }}
           >
-            <option value="all">All Approvers</option>
-            {contacts
-              .filter((c) => c.isActive)
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.email})
-                </option>
-              ))}
-          </select>
+            ⌘K
+          </kbd>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Filter size={14} style={{ color: "var(--text-muted)" }} />
+          <div style={{ position: "relative", display: "inline-block" }}>
+            <select
+              value={approverFilter}
+              onChange={(e) => setApproverFilter(e.target.value)}
+              style={{
+                appearance: "none",
+                WebkitAppearance: "none",
+                padding: "6px 28px 6px 10px",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--border-strong)",
+                background: "var(--bg-surface)",
+                fontSize: 12.5,
+                fontWeight: 500,
+                color: "var(--text-primary)",
+                cursor: "pointer",
+              }}
+            >
+              <option value="all">All Approvers</option>
+              {contacts
+                .filter((c) => c.isActive)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.email})
+                  </option>
+                ))}
+            </select>
+            <ChevronDown
+              size={13}
+              style={{
+                position: "absolute",
+                right: 8,
+                top: "50%",
+                transform: "translateY(-50%)",
+                pointerEvents: "none",
+                color: "var(--text-muted)",
+              }}
+            />
+          </div>
         </div>
       </div>
 
       {/* Urgent Bottlenecks Action Table */}
-      <div
-        style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-light)",
-          borderRadius: "var(--radius-lg)",
-          overflow: "hidden",
-          boxShadow: "var(--shadow-sm)",
-          marginBottom: 32,
-        }}
+      <AIGradientBorder
+        variant={sortedActiveBatches.length > 0 ? "urgent" : "success"}
+        duration={5}
+        style={{ marginBottom: 32 }}
       >
-        <div
-          style={{
-            padding: "14px 18px",
-            borderBottom: "1px solid var(--border-light)",
-            background: "var(--bg-subtle)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <strong>Urgent Workflow Bottlenecks ({sortedActiveBatches.length})</strong>
-          <small style={{ color: "var(--text-muted)", fontSize: 11 }}>
-            Sorted by: Escalated First → Longest in Stage Descending
-          </small>
-        </div>
+        <div style={{ background: "var(--bg-surface)", width: "100%" }}>
+          <div
+            style={{
+              padding: "14px 18px",
+              borderBottom: "1px solid var(--border-light)",
+              background: "var(--bg-subtle)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <strong>Urgent Workflow Bottlenecks ({sortedActiveBatches.length})</strong>
+            <small style={{ color: "var(--text-muted)", fontSize: 11 }}>
+              Sorted by: Escalated First → Longest in Stage Descending
+            </small>
+          </div>
 
         {sortedActiveBatches.length === 0 ? (
           <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-muted)" }}>
@@ -484,8 +564,8 @@ export default function CommandCenterPage() {
                       {/* Batch & Value */}
                       <td style={{ padding: "12px 16px" }}>
                         <div style={{ display: "flex", flexDirection: "column" }}>
-                          <strong style={{ fontFamily: "monospace", fontSize: 13 }}>
-                            #{batch.id.slice(0, 8)}
+                          <strong style={{ fontFamily: "monospace", fontSize: 13, color: "var(--text-primary)" }}>
+                            {formatBatchId(batch.id)}
                           </strong>
                           <span style={{ fontWeight: 650, color: "var(--text-primary)" }}>
                             {formatCurrency(totalAmount)}
@@ -514,7 +594,7 @@ export default function CommandCenterPage() {
                               height: 28,
                               borderRadius: "50%",
                               background: isEscalated ? "var(--urgency-rose)" : "var(--brand-primary)",
-                              color: "#fff",
+                              color: "var(--text-inverse)",
                               display: "grid",
                               placeItems: "center",
                               fontSize: 11,
@@ -577,7 +657,41 @@ export default function CommandCenterPage() {
 
                       {/* Latest Signal */}
                       <td style={{ padding: "12px 16px", maxWidth: 220 }}>
-                        {alertedStep?.lastComment ? (
+                        {isEscalated ? (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              padding: "3px 8px",
+                              background: "var(--urgency-rose-bg)",
+                              color: "var(--urgency-rose)",
+                              borderRadius: "var(--radius-sm)",
+                              fontSize: 11,
+                              fontWeight: 600,
+                            }}
+                          >
+                            <ShieldAlert size={12} />
+                            Escalated to backup
+                          </span>
+                        ) : (alertedStep?.reminderCount ?? 0) >= (alertedStep?.stage?.maxReminders ?? 3) ? (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              padding: "3px 8px",
+                              background: "var(--urgency-amber-bg)",
+                              color: "var(--urgency-amber-text)",
+                              borderRadius: "var(--radius-sm)",
+                              fontSize: 11,
+                              fontWeight: 600,
+                            }}
+                          >
+                            <BellRing size={12} />
+                            Max reminders reached
+                          </span>
+                        ) : alertedStep?.lastComment ? (
                           <span
                             style={{
                               display: "inline-block",
@@ -594,69 +708,77 @@ export default function CommandCenterPage() {
                             {alertedStep.lastComment.length > 45 ? "..." : ""}&rdquo;
                           </span>
                         ) : (
-                          <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
-                            Normal pending dispatch
-                          </span>
+                          <span style={{ color: "var(--text-muted)", fontSize: 13 }}>—</span>
                         )}
                       </td>
 
                       {/* Inline Actions */}
-                      <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                        <div style={{ display: "inline-flex", gap: 6 }}>
-                          {alertedStep && currentUser?.role?.toLowerCase() === "admin" && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="primary"
-                                onClick={() =>
-                                  setConfirmModalTarget({
-                                    batch,
-                                    step: alertedStep,
-                                  })
-                                }
-                                title="Authorize offline phone or verbal sign-off"
-                              >
-                                Confirm on Behalf
-                              </Button>
-
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() =>
-                                  setReassignModalTarget({
-                                    batch,
-                                    step: alertedStep,
-                                  })
-                                }
-                                leftIcon={<UserX size={12} />}
-                                title="Reassign to another active approver"
-                              >
-                                Reassign
-                              </Button>
-                            </>
-                          )}
-
-                          {alertedStep && (
+                      <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                        <div style={{ display: "inline-flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
+                          {alertedStep && currentUser?.role?.toLowerCase() === "admin" ? (
                             <Button
                               size="sm"
-                              variant="ghost"
-                              onClick={() => void handleOpenMagicLink(alertedStep.id)}
-                              leftIcon={<ExternalLink size={12} />}
-                              title="Open external sign-off page in new tab"
+                              variant="primary"
+                              onClick={() =>
+                                setConfirmModalTarget({
+                                  batch,
+                                  step: alertedStep,
+                                })
+                              }
+                              title="Authorize offline phone or verbal sign-off"
                             >
-                              Magic Link
+                              Confirm
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => void handleOpenHistory(batch.id)}
+                              leftIcon={<History size={12} />}
+                              title="Inspect full audit trail"
+                            >
+                              Audit
                             </Button>
                           )}
 
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => void handleOpenHistory(batch.id)}
-                            leftIcon={<History size={12} />}
-                            title="Inspect full audit trail"
-                          >
-                            Audit
-                          </Button>
+                          <ActionDropdown
+                            items={[
+                              ...(alertedStep && currentUser?.role?.toLowerCase() === "admin"
+                                ? [
+                                    {
+                                      label: "Reassign Approver",
+                                      icon: <UserX size={14} />,
+                                      onClick: () =>
+                                        setReassignModalTarget({
+                                          batch,
+                                          step: alertedStep,
+                                        }),
+                                    },
+                                  ]
+                                : []),
+                              ...(alertedStep
+                                ? [
+                                    {
+                                      label: "Open Magic Link",
+                                      icon: <ExternalLink size={14} />,
+                                      onClick: () => void handleOpenMagicLink(alertedStep.id),
+                                    },
+                                  ]
+                                : []),
+                              {
+                                label: "View Audit Trail",
+                                icon: <History size={14} />,
+                                onClick: () => void handleOpenHistory(batch.id),
+                              },
+                              {
+                                label: "Batch Details Page",
+                                icon: <Eye size={14} />,
+                                onClick: () => {
+                                  router.push(`/batches/${encodeURIComponent(batch.id)}`);
+                                },
+                              },
+                            ]}
+                          />
                         </div>
                       </td>
                     </tr>
@@ -666,36 +788,36 @@ export default function CommandCenterPage() {
             </table>
           </div>
         )}
-      </div>
+        </div>
+      </AIGradientBorder>
 
       {/* Ready for Payment Banner */}
       {readyForPaymentCount > 0 && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "16px 20px",
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-light)",
-            borderLeft: "4px solid var(--brand-primary)",
-            borderRadius: "var(--radius-lg)",
-            boxShadow: "var(--shadow-sm)",
-          }}
-        >
-          <div>
-            <strong style={{ fontSize: 14, color: "var(--text-primary)" }}>
-              {readyForPaymentCount} batch{readyForPaymentCount === 1 ? "" : "es"} completed approval and ready for settlement
-            </strong>
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-secondary)" }}>
-              All stage sign-offs have been authorized. The finance team can now record bank transfers and upload proofs.
-            </p>
+        <AIGradientBorder variant="success" duration={4} style={{ marginBottom: 32 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "16px 20px",
+              background: "var(--bg-surface)",
+              width: "100%",
+            }}
+          >
+            <div>
+              <strong style={{ fontSize: 14, color: "var(--text-primary)" }}>
+                {readyForPaymentCount} batch{readyForPaymentCount === 1 ? "" : "es"} completed approval and ready for settlement
+              </strong>
+              <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-secondary)" }}>
+                All stage sign-offs have been authorized. The finance team can now record bank transfers and upload proofs.
+              </p>
+            </div>
+            <Link href="/payments" className="ui-button ui-button--primary ui-button--md">
+              <span>Open Settlement Ledger</span>
+              <ArrowRight size={14} />
+            </Link>
           </div>
-          <Link href="/payments" className="ui-button ui-button--primary ui-button--md">
-            <span>Open Settlement Ledger</span>
-            <ArrowRight size={14} />
-          </Link>
-        </div>
+        </AIGradientBorder>
       )}
 
       {/* 2-Step Confirm on Behalf Modal */}
@@ -716,7 +838,7 @@ export default function CommandCenterPage() {
               }}
             >
               <div>
-                <strong>Batch:</strong> #{confirmModalTarget.batch.id.slice(0, 8)}
+                <strong>Batch:</strong> {formatBatchId(confirmModalTarget.batch.id)}
               </div>
               <div>
                 <strong>Current Approver:</strong>{" "}
@@ -910,7 +1032,7 @@ export default function CommandCenterPage() {
           setSelectedBatchId(null);
           setBatchHistory(null);
         }}
-        title={`Audit Trail: Batch #${selectedBatchId?.slice(0, 8)}`}
+        title={`Audit Trail: Batch ${formatBatchId(selectedBatchId)}`}
         description="Complete chronological timeline of workflow dispatches, sign-offs, and reminders."
       >
         {isLoadingHistory ? (

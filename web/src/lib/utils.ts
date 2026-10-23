@@ -215,3 +215,27 @@ export const sortBatches = (
   return list;
 };
 
+export const formatBatchId = (id: string | null | undefined): string => {
+  if (!id) return "";
+  const clean = id.trim();
+  if (clean === "demo-batch") return "B-DEMO-01";
+  const alphanumeric = clean.replace(/[^a-zA-Z0-9]/g, "");
+  const suffix = alphanumeric.length > 6 ? alphanumeric.slice(-6).toUpperCase() : alphanumeric.toUpperCase();
+  return `B-${suffix}`;
+};
+
+export const formatStageDuration = (
+  alertedAt: string | null | undefined,
+  nowMs: number = Date.now()
+): string => {
+  if (!alertedAt) return "Just started";
+  const start = new Date(alertedAt).getTime();
+  if (isNaN(start)) return "Just started";
+  const hours = Math.max(0, Math.round((nowMs - start) / (1000 * 60 * 60)));
+  if (hours < 1) return "< 1h in stage";
+  if (hours < 24) return `${hours}h in stage`;
+  const days = Math.floor(hours / 24);
+  const rem = hours % 24;
+  return rem > 0 ? `${days}d ${rem}h in stage` : `${days}d in stage`;
+};
+

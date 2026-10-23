@@ -1261,7 +1261,7 @@ export default function Home() {
   };
 
   return (
-    <main className="app-shell">
+    <main className="app-shell legacy">
       {/* Sidebar Navigation */}
       <Sidebar
         activeTab={activeNavTab}
@@ -1278,8 +1278,8 @@ export default function Home() {
         <div
           style={{
             padding: "8px 24px",
-            background: "#f8fafc",
-            borderBottom: "1px solid #e2e8f0",
+            background: "var(--bg-subtle)",
+            borderBottom: "1px solid var(--border-light)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -1289,7 +1289,7 @@ export default function Home() {
           <Link
             href="/"
             style={{
-              color: "#0f766e",
+              color: "var(--brand-primary)",
               fontWeight: 600,
               display: "inline-flex",
               alignItems: "center",
@@ -1299,7 +1299,7 @@ export default function Home() {
           >
             <span>← Back to new dashboard</span>
           </Link>
-          <span style={{ color: "#64748b", fontSize: 12 }}>Legacy Single-Page View</span>
+          <span style={{ color: "var(--text-muted)", fontSize: 12 }}>Legacy Single-Page View</span>
         </div>
 
         {/* Top Header */}

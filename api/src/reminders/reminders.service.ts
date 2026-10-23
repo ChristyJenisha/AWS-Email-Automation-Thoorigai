@@ -81,6 +81,51 @@ export class RemindersService {
         body: `A bill collection batch is ready for your review.${initialOtpCode ? ` Verification Code: ${initialOtpCode}.` : ''} Approve or return it here: ${approvalUrl.toString()}`,
         html,
       });
+      
+      // Also notify backup approver if present so either approver can review & authorize
+      if (
+        step.stage.backupContact?.email &&
+        step.stage.backupContact.id &&
+        step.stage.backupContact.email !== approver.email
+      ) {
+        try {
+          const backupToken = this.workflowTransitions.generateApprovalToken(
+            step.id,
+            step.stage.backupContact.id,
+            step.batch.organizationId,
+          );
+          const backupApprovalUrl = new URL(
+            '/approve',
+            process.env.APPROVAL_APP_URL ?? 'http://localhost:3000',
+          );
+          backupApprovalUrl.searchParams.set('token', backupToken);
+
+          const backupHtml = buildApprovalEmailHtml({
+            headline: 'Action Required (Backup Approver): Stage 1 Workflow Approval',
+            recipientName: step.stage.backupContact.name,
+            leadMessage:
+              'A new bill collection batch has been initialized. As assigned backup approver, you can also review and authorize this batch.',
+            batchId: step.batchId,
+            stageOrder: 1,
+            otpCode: initialOtpCode,
+            otpExpiresMinutes: 30,
+            ctaUrl: backupApprovalUrl.toString(),
+            ctaText: 'Review & Approve Batch →',
+            subNotice:
+              'Click above to open the batch details. Then manually enter your 6-digit verification code to confirm approval.',
+          });
+
+          await this.emailService.sendReminderEmail({
+            to: step.stage.backupContact.email,
+            subject: `Approval required (Backup Approver) for batch ${step.batchId}`,
+            body: `A bill collection batch is ready for your review.${initialOtpCode ? ` Verification Code: ${initialOtpCode}.` : ''} Approve or return it here: ${backupApprovalUrl.toString()}`,
+            html: backupHtml,
+          });
+        } catch (backupErr) {
+          console.warn('[BACKUP_APPROVER_EMAIL_WARN]', backupErr);
+        }
+      }
+
       await this.prisma.notification.update({
         where: { id: notification.id },
         data: { status: NotificationStatus.SENT, sentAt: new Date() },

@@ -3,6 +3,7 @@
 import React, { FormEvent } from "react";
 import { X, UserX, UserPlus } from "lucide-react";
 import { ContactRecord } from "../../types";
+import { formatBatchId } from "../../lib/utils";
 
 type ReassignApproverModalProps = {
   isOpen: boolean;
@@ -64,7 +65,7 @@ export function ReassignApproverModal({
         </div>
 
         <p className="dialog-description">
-          Reassign active step for Batch <strong>{reassignTarget.batchId.slice(0, 8)}</strong> from{" "}
+          Reassign active step for Batch <strong>{formatBatchId(reassignTarget.batchId)}</strong> from{" "}
           {reassignTarget.currentContactName || "current approver"} to another active organization contact.
         </p>
 
@@ -78,8 +79,8 @@ export function ReassignApproverModal({
                 marginBottom: 6,
               }}
             >
-              <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "#334155" }}>
-                Select Replacement Approver <span style={{ color: "#e11d48" }}>*</span>
+              <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                Select Replacement Approver <span style={{ color: "var(--urgency-rose)" }}>*</span>
               </label>
               <button
                 type="button"
@@ -116,7 +117,7 @@ export function ReassignApproverModal({
                 display: "block",
                 fontSize: "0.85rem",
                 fontWeight: 600,
-                color: "#334155",
+                color: "var(--text-primary)",
                 marginBottom: 6,
               }}
             >

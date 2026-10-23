@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
     "localhost:3000",
     "192.168.1.12",
     "192.168.1.12:3000",
+    "*.trycloudflare.com",
+    "lots-lawn-locate-img.trycloudflare.com",
   ],
   async rewrites() {
     const apiBase = process.env.INTERNAL_API_URL || "http://localhost:3001";

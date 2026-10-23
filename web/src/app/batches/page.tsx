@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useState, useMemo, useCallback, useEffect } from "react";
+import React, { Suspense, useState, useMemo, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
@@ -23,10 +23,28 @@ import {
   ArrowRight,
   X,
   FileSpreadsheet,
+  Bell,
+  Eye,
+  ChevronDown,
+  CreditCard,
 } from "lucide-react";
 import { useDataContext } from "../../lib/DataContext";
-import { formatCurrency, isValidConfirmNote, filterBatches, sortBatches } from "../../lib/utils";
-import { Badge, Button, ModalDialog, SlideOverSheet } from "../../components/ui";
+import {
+  formatCurrency,
+  isValidConfirmNote,
+  filterBatches,
+  sortBatches,
+  formatBatchId,
+  formatStageDuration,
+} from "../../lib/utils";
+import {
+  Badge,
+  Button,
+  ModalDialog,
+  SlideOverSheet,
+  ActionDropdown,
+  AIGradientBorder,
+} from "../../components/ui";
 import { authFetch, getApiBase } from "../../lib/api";
 import { BatchRecord, ContactRecord, BatchHistoryRecord } from "../../types";
 
@@ -68,6 +86,18 @@ function BatchesContent() {
   const [prevSearch, setPrevSearch] = useState(currentSearch);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [pageSize, setPageSize] = useState(10);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Synchronize search input if URL changes externally (React recommended pattern)
   if (prevSearch !== currentSearch) {
@@ -363,7 +393,7 @@ function BatchesContent() {
         <div>
           <p className="eyebrow">AUDIT & WORKFLOW ARCHIVE</p>
           <h2>
-            Batches Ledger <span className="section-total">{totalItems} displayed</span>
+            Batches Ledger <span className="shell-header-badge">{totalItems} displayed</span>
           </h2>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -412,7 +442,7 @@ function BatchesContent() {
             <button
               key={tab.id}
               onClick={() => updateQuery({ status: tab.id, page: "1" })}
-              className={`filter-tab ${currentStatus === tab.id ? "selected" : ""}`}
+              className={`ui-status-tab ${currentStatus === tab.id ? "active" : ""}`}
               style={{
                 borderRadius: "var(--radius-full)",
                 padding: "6px 14px",
@@ -421,7 +451,7 @@ function BatchesContent() {
                 border: "1px solid",
                 borderColor: currentStatus === tab.id ? "var(--brand-primary)" : "var(--border-light)",
                 background: currentStatus === tab.id ? "var(--brand-primary)" : "var(--bg-subtle)",
-                color: currentStatus === tab.id ? "#ffffff" : "var(--text-secondary)",
+                color: currentStatus === tab.id ? "var(--text-inverse)" : "var(--text-primary)",
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
@@ -436,7 +466,7 @@ function BatchesContent() {
                   padding: "1px 6px",
                   borderRadius: "var(--radius-full)",
                   background: currentStatus === tab.id ? "rgba(255,255,255,0.25)" : "var(--border-light)",
-                  color: currentStatus === tab.id ? "#ffffff" : "var(--text-muted)",
+                  color: currentStatus === tab.id ? "var(--text-inverse)" : "var(--text-secondary)",
                 }}
               >
                 {counts[tab.id]}
@@ -448,7 +478,7 @@ function BatchesContent() {
         {/* Search & Approver Select */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
           {/* Search Box */}
-          <div style={{ flex: "1 1 280px", position: "relative" }}>
+          <div style={{ flex: "1 1 280px", position: "relative", display: "flex", alignItems: "center" }}>
             <Search
               size={15}
               style={{
@@ -460,8 +490,9 @@ function BatchesContent() {
               }}
             />
             <input
+              ref={searchInputRef}
               type="text"
-              placeholder="Search by Batch ID or Invoice #..."
+              placeholder="Search by Batch ID or Invoice #... (⌘K)"
               value={searchInput}
               onChange={(e) => {
                 setSearchInput(e.target.value);
@@ -469,7 +500,7 @@ function BatchesContent() {
               }}
               style={{
                 width: "100%",
-                padding: "8px 12px 8px 34px",
+                padding: "8px 45px 8px 34px",
                 borderRadius: "var(--radius-md)",
                 border: "1px solid var(--border-strong)",
                 background: "var(--bg-surface)",
@@ -477,6 +508,21 @@ function BatchesContent() {
                 fontFamily: "inherit",
               }}
             />
+            <kbd
+              style={{
+                position: "absolute",
+                right: searchInput ? 32 : 12,
+                fontSize: 10,
+                padding: "2px 5px",
+                borderRadius: 4,
+                border: "1px solid var(--border-light)",
+                background: "var(--bg-subtle)",
+                color: "var(--text-muted)",
+                fontFamily: "monospace",
+              }}
+            >
+              ⌘K
+            </kbd>
             {searchInput && (
               <button
                 type="button"
@@ -501,19 +547,22 @@ function BatchesContent() {
           </div>
 
           {/* Approver Filter */}
-          <div style={{ minWidth: 200 }}>
+          <div style={{ minWidth: 200, position: "relative" }}>
             <select
               value={currentApprover}
               onChange={(e) => updateQuery({ approver: e.target.value || null, page: "1" })}
               style={{
                 width: "100%",
-                padding: "8px 12px",
+                appearance: "none",
+                WebkitAppearance: "none",
+                padding: "8px 28px 8px 12px",
                 borderRadius: "var(--radius-md)",
                 border: "1px solid var(--border-strong)",
                 background: "var(--bg-surface)",
                 fontSize: 13,
                 fontFamily: "inherit",
                 color: "var(--text-primary)",
+                cursor: "pointer",
               }}
             >
               <option value="">All Approvers</option>
@@ -523,6 +572,17 @@ function BatchesContent() {
                 </option>
               ))}
             </select>
+            <ChevronDown
+              size={14}
+              style={{
+                position: "absolute",
+                right: 10,
+                top: "50%",
+                transform: "translateY(-50%)",
+                pointerEvents: "none",
+                color: "var(--text-muted)",
+              }}
+            />
           </div>
 
           {/* Reset Filters */}
@@ -550,15 +610,14 @@ function BatchesContent() {
       </div>
 
       {/* Batches Table */}
-      <div
-        style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-light)",
-          borderRadius: "var(--radius-lg)",
-          overflow: "hidden",
-          boxShadow: "var(--shadow-sm)",
-        }}
-      >
+      <AIGradientBorder variant="ai" duration={6} style={{ width: "100%" }}>
+        <div
+          style={{
+            background: "var(--bg-surface)",
+            width: "100%",
+            overflow: "hidden",
+          }}
+        >
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
             <thead>
@@ -595,9 +654,9 @@ function BatchesContent() {
                 </th>
                 <th
                   onClick={() => handleToggleSort("amount")}
-                  style={{ padding: "12px 16px", fontWeight: 600, color: "var(--text-secondary)", cursor: "pointer", textAlign: "right" }}
+                  style={{ padding: "12px 16px", fontWeight: 600, color: "var(--text-secondary)", cursor: "pointer", textAlign: "right", whiteSpace: "nowrap" }}
                 >
-                  <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 6, width: "100%" }}>
+                  <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 6, width: "100%", whiteSpace: "nowrap" }}>
                     <span>Amount / Balance Due</span>
                     <ArrowUpDown size={12} opacity={currentSortField === "amount" ? 1 : 0.4} />
                   </div>
@@ -669,7 +728,7 @@ function BatchesContent() {
                               fontSize: 13,
                             }}
                           >
-                            #{batch.id.slice(0, 8)}
+                            {formatBatchId(batch.id)}
                           </Link>
                           <button
                             type="button"
@@ -688,16 +747,59 @@ function BatchesContent() {
                         </div>
                       </td>
 
-                      {/* Current Stage & Approver */}
+                      {/* Current Stage & Approver with Time-in-Stage & Reminders */}
                       <td style={{ padding: "14px 16px", verticalAlign: "middle" }}>
                         {activeStep ? (
                           <div>
-                            <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>
-                              {activeStep.stage?.contact?.name ?? "Assigned Approver"}
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                              <span style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>
+                                {activeStep.stage?.contact?.name ?? "Assigned Approver"}
+                              </span>
+                              {activeStep.status === "ESCALATED" && (
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    padding: "1px 5px",
+                                    borderRadius: 4,
+                                    background: "var(--urgency-rose-bg)",
+                                    color: "var(--urgency-rose)",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  ESCALATED
+                                </span>
+                              )}
                             </div>
-                            <small style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                            <div style={{ color: "var(--text-muted)", fontSize: 11, marginBottom: 3 }}>
                               Stage {activeStep.stage?.order ?? 1} of {totalSteps} · {activeStep.stage?.contact?.email}
-                            </small>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11 }}>
+                              {activeStep.alertedAt && (
+                                <span
+                                  style={{
+                                    color: activeStep.status === "ESCALATED" ? "var(--urgency-rose)" : "var(--text-secondary)",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 3,
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  <Clock size={11} />
+                                  {formatStageDuration(activeStep.alertedAt)}
+                                </span>
+                              )}
+                              <span
+                                style={{
+                                  color: (activeStep.reminderCount ?? 0) >= (activeStep.stage?.maxReminders ?? 3) ? "var(--urgency-amber)" : "var(--text-muted)",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 3,
+                                }}
+                              >
+                                <Bell size={11} />
+                                {activeStep.reminderCount ?? 0}/{activeStep.stage?.maxReminders ?? 3} reminders
+                              </span>
+                            </div>
                           </div>
                         ) : (
                           <div>
@@ -757,67 +859,90 @@ function BatchesContent() {
                       </td>
 
                       {/* Actions */}
-                      <td style={{ padding: "14px 16px", verticalAlign: "middle", textAlign: "right" }}>
-                        <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                      <td style={{ padding: "14px 16px", verticalAlign: "middle", textAlign: "right", whiteSpace: "nowrap" }}>
+                        <div style={{ display: "inline-flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
+                          {batch.status === "READY_FOR_PAYMENT" && (
+                            <button
+                              type="button"
+                              onClick={() => router.push("/payments")}
+                              className="ui-button ui-button--primary ui-button--sm"
+                              title="Record bank payment and allocate to bills"
+                              style={{ padding: "4px 10px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5 }}
+                            >
+                              <CreditCard size={13} />
+                              <span>Record Payment</span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => void handleOpenAuditSheet(batch.id)}
                             className="ui-button ui-button--secondary ui-button--sm"
                             title="Open Audit Trail & Details Slide-Over"
-                            style={{ padding: "4px 8px", fontSize: 12 }}
+                            style={{ padding: "4px 10px", fontSize: 12 }}
                           >
                             <History size={13} />
                             <span>Audit</span>
                           </button>
 
-                          {batch.status === "IN_PROGRESS" && activeStep && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setConfirmModalTarget({ batch, step: activeStep });
-                                  setConfirmNote("");
-                                  setConfirmError(null);
-                                }}
-                                className="ui-button ui-button--secondary ui-button--sm"
-                                title="Confirm approval on behalf of approver"
-                                style={{ padding: "4px 8px", fontSize: 12 }}
-                              >
-                                <ShieldCheck size={13} style={{ color: "var(--brand-primary)" }} />
-                                <span>Confirm</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setReassignModalTarget({ batch, step: activeStep });
-                                  setReassignContactId("");
-                                  setReassignReason("");
-                                  setReassignError(null);
-                                }}
-                                className="ui-button ui-button--secondary ui-button--sm"
-                                title="Reassign stage to another active contact"
-                                style={{ padding: "4px 8px", fontSize: 12 }}
-                              >
-                                <UserCheck size={13} style={{ color: "var(--status-info-text)" }} />
-                                <span>Reassign</span>
-                              </button>
-                            </>
-                          )}
-
-                          {currentUser?.role?.toLowerCase() === "admin" && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDeleteModalTarget(batch);
-                                setDeleteError(null);
-                              }}
-                              className="ui-button ui-button--secondary ui-button--sm"
-                              title="Delete batch and its invoices"
-                              style={{ padding: "4px 6px", color: "var(--urgency-rose)" }}
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          )}
+                          <ActionDropdown
+                            items={[
+                              ...(batch.status === "READY_FOR_PAYMENT"
+                                ? [
+                                    {
+                                      label: "Record Payment",
+                                      icon: <CreditCard size={14} style={{ color: "var(--brand-primary)" }} />,
+                                      onClick: () => {
+                                        router.push("/payments");
+                                      },
+                                    },
+                                  ]
+                                : []),
+                              ...(batch.status === "IN_PROGRESS" && activeStep && currentUser?.role?.toLowerCase() === "admin"
+                                ? [
+                                    {
+                                      label: "Confirm on Behalf",
+                                      icon: <ShieldCheck size={14} style={{ color: "var(--brand-primary)" }} />,
+                                      onClick: () => {
+                                        setConfirmModalTarget({ batch, step: activeStep });
+                                        setConfirmNote("");
+                                        setConfirmError(null);
+                                      },
+                                    },
+                                    {
+                                      label: "Reassign Approver",
+                                      icon: <UserCheck size={14} style={{ color: "var(--status-info-text)" }} />,
+                                      onClick: () => {
+                                        setReassignModalTarget({ batch, step: activeStep });
+                                        setReassignContactId("");
+                                        setReassignReason("");
+                                        setReassignError(null);
+                                      },
+                                    },
+                                  ]
+                                : []),
+                              {
+                                label: "View Batch Details",
+                                icon: <Eye size={14} />,
+                                onClick: () => {
+                                  router.push(`/batches/${encodeURIComponent(batch.id)}`);
+                                },
+                              },
+                              ...(currentUser?.role?.toLowerCase() === "admin"
+                                ? [
+                                    {
+                                      label: "Delete Batch",
+                                      icon: <Trash2 size={14} />,
+                                      variant: "danger" as const,
+                                      onClick: () => {
+                                        setDeleteModalTarget(batch);
+                                        setDeleteError(null);
+                                      },
+                                    },
+                                  ]
+                                : []),
+                            ]}
+                          />
                         </div>
                       </td>
                     </tr>
@@ -900,7 +1025,8 @@ function BatchesContent() {
             </div>
           </div>
         )}
-      </div>
+        </div>
+      </AIGradientBorder>
 
       {/* Slide-Over Audit Sheet */}
       <SlideOverSheet
@@ -909,7 +1035,7 @@ function BatchesContent() {
           setSelectedBatchId(null);
           setBatchHistory(null);
         }}
-        title={`Audit Trail: Batch #${selectedBatchId?.slice(0, 8)}`}
+        title={`Audit Trail: Batch ${formatBatchId(selectedBatchId)}`}
         description="Complete chronological record of dispatches, approver sign-offs, and reminders."
         width="540px"
       >
@@ -1076,7 +1202,7 @@ function BatchesContent() {
               }}
             >
               <div>
-                <strong>Batch:</strong> #{confirmModalTarget.batch.id.slice(0, 8)}
+                <strong>Batch:</strong> {formatBatchId(confirmModalTarget.batch.id)}
               </div>
               <div>
                 <strong>Current Approver:</strong>{" "}
@@ -1258,7 +1384,7 @@ function BatchesContent() {
             >
               <p style={{ margin: 0, fontWeight: 600 }}>This action cannot be undone.</p>
               <p style={{ margin: "4px 0 0", fontSize: 12 }}>
-                Batch #{deleteModalTarget.id.slice(0, 8)} with {(deleteModalTarget.bills ?? []).length} invoices will be removed.
+                Batch {formatBatchId(deleteModalTarget.id)} with {(deleteModalTarget.bills ?? []).length} invoices will be removed.
               </p>
             </div>
 

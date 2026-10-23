@@ -111,8 +111,8 @@ export function ContactsModal({
         </div>
 
         {isNotAdmin && !modalNotice && (
-          <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 14px", margin: "0 0 16px 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-            <div style={{ fontSize: "0.85rem", color: "#92400e" }}>
+          <div style={{ background: "var(--urgency-amber-bg)", border: "1px solid var(--urgency-amber-border)", borderRadius: 8, padding: "10px 14px", margin: "0 0 16px 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+            <div style={{ fontSize: "0.85rem", color: "var(--urgency-amber-text)" }}>
               Viewing in <strong>{currentUser?.role ?? "Approver"}</strong> mode. Administrator role is required to add, edit, or delete contacts.
             </div>
             {onSwitchToAdmin && (
@@ -122,7 +122,7 @@ export function ContactsModal({
                   onSwitchToAdmin();
                   setModalNotice({ type: "success", message: "Switched to Administrator role! You can now manage contacts." });
                 }}
-                style={{ fontSize: "0.8rem", fontWeight: 600, padding: "5px 12px", background: "#d97706", color: "#ffffff", border: "none", borderRadius: 5, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}
+                style={{ fontSize: "0.8rem", fontWeight: 600, padding: "5px 12px", background: "var(--urgency-amber)", color: "var(--text-inverse)", border: "none", borderRadius: 5, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}
               >
                 <Crown size={13} />
                 <span>Switch to Admin</span>
@@ -150,8 +150,8 @@ export function ContactsModal({
                       alignItems: "center",
                       gap: 6,
                       padding: "6px 14px",
-                      background: "#b91c1c",
-                      color: "#ffffff",
+                      background: "var(--urgency-rose)",
+                      color: "var(--text-inverse)",
                       border: "none",
                       borderRadius: 6,
                       fontSize: "0.82rem",

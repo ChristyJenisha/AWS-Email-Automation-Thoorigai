@@ -3,7 +3,7 @@
 import React from "react";
 import { Clock, UserCheck, ArrowRight, ExternalLink, AlertTriangle, CheckCircle, ChevronRight, Layers, FileText } from "lucide-react";
 import { AppUser, BatchRecord } from "../../types";
-import { formatCurrency } from "../../lib/utils";
+import { formatCurrency, formatBatchId } from "../../lib/utils";
 
 type CompactPipelineSectionProps = {
   liveBatches: BatchRecord[];
@@ -84,8 +84,8 @@ export function CompactPipelineSection({
               const assignedContact = alertedStep?.stage?.contact;
               const isSingleBill = (batch.bills?.length ?? 0) === 1;
               const billTitle = isSingleBill
-                ? batch.bills?.[0]?.billNumber || `Bill ${batch.id.slice(0, 8)}`
-                : `Batch ${batch.id.slice(0, 8)} (${batch.bills?.length ?? 0} bills)`;
+                ? batch.bills?.[0]?.billNumber || `Bill ${formatBatchId(batch.id)}`
+                : `Batch ${formatBatchId(batch.id)} (${batch.bills?.length ?? 0} bills)`;
 
               const totalAmount = (batch.bills ?? []).reduce(
                 (sum, b) => sum + Number(b.amount ?? 0),

@@ -3,7 +3,7 @@
 import React from "react";
 import { X, Layers, FileSpreadsheet, ShieldAlert, MailCheck, Clock, CheckCircle2, AlertTriangle, RotateCcw } from "lucide-react";
 import { BatchHistoryRecord } from "../../types";
-import { formatCurrency } from "../../lib/utils";
+import { formatCurrency, formatBatchId } from "../../lib/utils";
 
 type HistoryTab = "stages" | "bills" | "audit" | "notifications";
 
@@ -43,7 +43,7 @@ export function BatchHistoryDrawer({
           <div>
             <p className="eyebrow">AUDIT TRAIL & LIFECYCLE</p>
             <h2 id="history-dialog-title">
-              Batch {selectedBatchHistory?.id.slice(0, 8)} Details
+              Batch {formatBatchId(selectedBatchHistory?.id)} Details
             </h2>
           </div>
           <button className="dialog-close" type="button" onClick={onClose} aria-label="Close dialog">

@@ -108,9 +108,11 @@ export function buildApprovalEmailHtml(input: ApprovalEmailTemplateInput): strin
       ${input.subNotice ? `<p style="font-size: 12px; color: #64748b; line-height: 1.5; margin: 16px 0 0 0;">${input.subNotice}</p>` : ''}
     </div>
 
-    <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 24px; text-align: center; font-size: 11px; color: #94a3b8; line-height: 1.5;">
-      Sent automatically by ${brandName} Automated Workflow Engine.<br/>
-      If you did not anticipate this request, please alert your accounts administrator.
+    <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 24px; text-align: center; font-size: 11px; color: #64748b; line-height: 1.6;">
+      <strong>${brandName}</strong> &bull; Bill Collection &amp; Workflow Authorization System<br/>
+      Sent automatically on behalf of Thoorigai Infotech.<br/>
+      This is a secure transactional message regarding pending financial batch authorizations.<br/>
+      If you did not anticipate this request, please contact your accounts administrator.
     </div>
   </div>
 </body>
@@ -170,9 +172,8 @@ export class EmailService {
             <p>${body.replace(/\n/g, '<br/>')}</p>
           </div>`,
           headers: {
-            'X-Priority': '1',
-            Importance: 'high',
             'X-Auto-Response-Suppress': 'OOF, AutoReply',
+            'Precedence': 'bulk',
           },
         });
         console.log(`[EMAIL_SENT_SMTP] To: ${to} (MessageId: ${info.messageId})`);

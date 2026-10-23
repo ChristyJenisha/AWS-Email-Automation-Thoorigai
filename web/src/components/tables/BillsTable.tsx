@@ -184,7 +184,7 @@ export function BillsTable({
                           style={{
                             background: "transparent",
                             border: "none",
-                            color: "#32745b",
+                            color: "var(--brand-primary)",
                             cursor: "pointer",
                             padding: "4px 6px",
                             borderRadius: 4,
@@ -207,7 +207,7 @@ export function BillsTable({
                           style={{
                             background: "transparent",
                             border: "none",
-                            color: "#94a3b8",
+                            color: "var(--text-muted)",
                             cursor: "pointer",
                             padding: "4px 6px",
                             borderRadius: 4,
@@ -215,11 +215,11 @@ export function BillsTable({
                             alignItems: "center",
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.color = "#dc2626";
-                            e.currentTarget.style.background = "#fee2e2";
+                            e.currentTarget.style.color = "var(--urgency-rose)";
+                            e.currentTarget.style.background = "var(--urgency-rose-bg)";
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.color = "#94a3b8";
+                            e.currentTarget.style.color = "var(--text-muted)";
                             e.currentTarget.style.background = "transparent";
                           }}
                         >
