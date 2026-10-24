@@ -540,7 +540,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     </small>
                   </div>
 
-                  {process.env.NEXT_PUBLIC_DEMO_MODE === "true" && (
+                  {isDemoMode && (
                     <>
                       <div className="shell-dropdown-divider" />
                       <div style={{ padding: "4px 10px 2px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)" }}>

@@ -17,6 +17,7 @@ import {
 
 import { AuthGuard } from '../auth/auth.guard.js';
 import { AuthService } from '../auth/auth.service.js';
+import type { AuthedRequest } from '../auth/authed-request.interface.js';
 
 import {
   AllocateOnAccountPaymentDto,
@@ -44,7 +45,7 @@ export class PaymentsController {
 
   @Get('batch/:batchId')
   async listByBatch(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('batchId') batchId: string,
   ) {
     const batch = await this.paymentsService.getBatch(batchId);
@@ -56,7 +57,7 @@ export class PaymentsController {
 
   @Post()
   async create(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Body() input: CreatePaymentDto,
     @Headers('idempotency-key') idempotencyKeyHeader?: string,
   ) {
@@ -74,7 +75,7 @@ export class PaymentsController {
 
   @Post(':paymentId/proof-upload-url')
   async createProofUploadUrl(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('paymentId') paymentId: string,
     @Body() input: CreatePaymentProofUploadUrlDto,
   ) {
@@ -88,7 +89,7 @@ export class PaymentsController {
 
   @Put(':paymentId/proof-file')
   async uploadProofFile(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('paymentId') paymentId: string,
   ) {
     this.authService.assertAdminAccess(request?.user);
@@ -114,7 +115,7 @@ export class PaymentsController {
 
   @Get(':paymentId/proof-download-url')
   async createProofDownloadUrl(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('paymentId') paymentId: string,
   ) {
     this.authService.assertAdminAccess(request?.user);
@@ -128,7 +129,7 @@ export class PaymentsController {
   @Get(':paymentId/proof-file')
   @Header('Cache-Control', 'private, no-store')
   async getLocalProofFile(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('paymentId') paymentId: string,
   ) {
     this.authService.assertAdminAccess(request?.user);
@@ -143,7 +144,7 @@ export class PaymentsController {
 
   @Post(':paymentId/proof')
   async confirmProofUpload(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('paymentId') paymentId: string,
     @Body() input: ConfirmPaymentProofDto,
   ) {
@@ -157,7 +158,7 @@ export class PaymentsController {
 
   @Post(':paymentId/allocations')
   async allocateOnAccount(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('paymentId') paymentId: string,
     @Body() input: AllocateOnAccountPaymentDto,
   ) {

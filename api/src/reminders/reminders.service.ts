@@ -49,9 +49,9 @@ export class RemindersService {
 
     try {
       let initialOtpCode: string | undefined;
-      if (typeof (this.workflowTransitions as any).issueApprovalOtp === 'function') {
+      if (typeof this.workflowTransitions.issueApprovalOtp === 'function') {
         try {
-          const otpResult = await (this.workflowTransitions as any).issueApprovalOtp(step.id, 30);
+          const otpResult = await this.workflowTransitions.issueApprovalOtp(step.id, 30);
           initialOtpCode = otpResult?.code;
         } catch (otpErr) {
           console.warn('[INITIAL_OTP_ISSUE_WARN]', otpErr);

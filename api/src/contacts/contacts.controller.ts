@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { AuthService } from '../auth/auth.service.js';
+import type { AuthedRequest } from '../auth/authed-request.interface.js';
 import { CreateContactDto, UpdateContactDto } from './contact.dto.js';
 import { ContactsService } from './contacts.service.js';
 
@@ -14,28 +15,28 @@ export class ContactsController {
   ) {}
 
   @Get()
-  list(@Req() request: any, @Query('organizationId') organizationId?: string) {
+  list(@Req() request: AuthedRequest, @Query('organizationId') organizationId?: string) {
     this.authService.assertOrganizationAccess(request?.user, organizationId);
     this.authService.assertAdminAccess(request?.user);
     return this.contactsService.listByOrganization(organizationId!);
   }
 
   @Post()
-  create(@Req() request: any, @Body() input: CreateContactDto) {
+  create(@Req() request: AuthedRequest, @Body() input: CreateContactDto) {
     this.authService.assertOrganizationAccess(request?.user, input.organizationId);
     this.authService.assertAdminAccess(request?.user);
     return this.contactsService.create(input);
   }
 
   @Patch(':id')
-  update(@Req() request: any, @Param('id') id: string, @Body() input: UpdateContactDto, @Query('organizationId') organizationId?: string) {
+  update(@Req() request: AuthedRequest, @Param('id') id: string, @Body() input: UpdateContactDto, @Query('organizationId') organizationId?: string) {
     this.authService.assertOrganizationAccess(request?.user, organizationId);
     this.authService.assertAdminAccess(request?.user);
     return this.contactsService.update(id, organizationId!, input);
   }
 
   @Delete(':id')
-  delete(@Req() request: any, @Param('id') id: string, @Query('organizationId') organizationId?: string) {
+  delete(@Req() request: AuthedRequest, @Param('id') id: string, @Query('organizationId') organizationId?: string) {
     this.authService.assertOrganizationAccess(request?.user, organizationId);
     this.authService.assertAdminAccess(request?.user);
     return this.contactsService.delete(id, organizationId!);

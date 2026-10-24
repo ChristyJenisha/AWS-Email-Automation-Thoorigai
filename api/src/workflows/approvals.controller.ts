@@ -1,4 +1,5 @@
 import { Body, Controller, Post, Req, UsePipes, ValidationPipe } from '@nestjs/common';
+import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { WorkflowTransitionsService } from './workflow-transitions.service.js';
@@ -42,7 +43,7 @@ export class ApprovalsController {
 
   @Post('complete')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
-  complete(@Body() input: ApprovalTokenActionDto, @Req() req?: any) {
+  complete(@Body() input: ApprovalTokenActionDto, @Req() req?: Request) {
     const requireOtp = process.env.REQUIRE_APPROVAL_OTP !== 'false';
     const approval = this.transitions.verifyApprovalToken(input.token, requireOtp);
     const ip = req?.ip || 'unknown';
@@ -74,7 +75,7 @@ export class ApprovalsController {
 
   @Post('return')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
-  returnToPrevious(@Body() input: ApprovalTokenActionDto, @Req() req?: any) {
+  returnToPrevious(@Body() input: ApprovalTokenActionDto, @Req() req?: Request) {
     const requireOtp = process.env.REQUIRE_APPROVAL_OTP !== 'false';
     const approval = this.transitions.verifyApprovalToken(input.token, requireOtp);
     const ip = req?.ip || 'unknown';
@@ -90,7 +91,7 @@ export class ApprovalsController {
 
   @Post('reassign')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  reassign(@Body() input: ApprovalReassignDto, @Req() req?: any) {
+  reassign(@Body() input: ApprovalReassignDto, @Req() req?: Request) {
     const ip = req?.ip || 'unknown';
     const userAgent = (req?.headers?.['user-agent'] as string) || 'unknown';
     return this.transitions.requestReassignment(

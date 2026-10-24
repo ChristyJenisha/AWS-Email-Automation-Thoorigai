@@ -16,13 +16,14 @@ export function getApiBase(): string {
 
 export async function loginApi(
   email: string,
-  password = "demo123"
+  password?: string
 ): Promise<{ token: string; user: AppUser } | null> {
   const apiBase = getApiBase();
+  const effectivePassword = password ?? (process.env.NEXT_PUBLIC_DEMO_MODE === "true" ? "demo123" : "");
   const response = await fetch(`${apiBase}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password: effectivePassword }),
   });
 
   if (!response.ok) return null;

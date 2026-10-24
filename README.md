@@ -91,10 +91,12 @@ Every item flagged in the review report (`REMEDIATION-HANDOVER.md`) has been sys
 | **P2** | **P2-1 & P2-2** | Outbox pattern for resilient email delivery | **FIXED** | Added `Outbox` table and `OutboxService` with exponential backoff and dead-letter queue (max 5 retries). |
 | **P2** | **P2-3** | Centralized organization scoping | **FIXED** | Implemented `OrgScopedGuard` and `@OrgScoped()` decorator to guard tenant boundaries automatically. |
 | **P2** | **P2-4** | Duplicate payment creation risk | **FIXED** | Added unique `idempotencyKey` on `Payment`. Frontend generates UUID per payment submission modal. |
-| **P2-7** | Missing data retention / cascade deletion | **FIXED** | Added `deletedAt` soft-delete timestamp column to `Batch`, `Bill`, and `Payment` models. |
-| **P2-8** | Missing API documentation & type drift | **FIXED** | Integrated `@nestjs/swagger` with auto-generated OpenAPI documentation at `/api/docs`. |
-| **P3-1 & P3-2** | Junk files & public docx report | **FIXED** | Deleted `api_out.log`, `START_SERVERS.bat`, `api/check_db.cjs`, and `web/public/*.docx`. Updated `.gitignore`. |
-| **P3-6** | POC Full-Loop Integration Test | **FIXED** | Added `poc-full-loop.spec.ts` executing the complete 7-step POC lifecycle (22 test suites, 98 passing tests). |
+| **P2** | **P2-6** | Minimal logging & monitoring | **FIXED** | Implemented `AllExceptionsFilter` structured JSON error logging and `RequestIdMiddleware` attaching `X-Request-Id` tracing. |
+| **P2** | **P2-7** | Missing data retention / cascade deletion | **FIXED** | Added `deletedAt` soft-delete timestamp column to `Batch`, `Bill`, and `Payment` models. |
+| **P2** | **P2-8** | Missing API documentation & type drift | **FIXED** | Integrated `@nestjs/swagger` with auto-generated OpenAPI documentation at `/api/docs`. |
+| **P3** | **P3-1 & P3-2** | Junk files & public docx report | **FIXED** | Deleted `api_out.log`, `START_SERVERS.bat`, `api/check_db.cjs`, and `web/public/*.docx`. Updated `.gitignore`. |
+| **P3** | **P3-4** | Untyped `as any` and `request: any` | **FIXED** | Created `AuthedRequest` interface, typed all controller parameters, and eliminated `as any` casting. |
+| **P3** | **P3-6** | POC Full-Loop Integration Test | **FIXED** | Added `poc-full-loop.spec.ts` executing the complete 7-step POC lifecycle (23 test suites, 100 passing tests). |
 | **P3-7** | Automated secret scanning | **FIXED** | Added Gitleaks action in CI workflow and pre-commit hook in `.husky/pre-commit`. |
 | **P3-8** | Environment schema validation | **FIXED** | Startup validator verifies all required production keys and halts with descriptive guidance. |
 
@@ -105,7 +107,7 @@ Every item flagged in the review report (`REMEDIATION-HANDOVER.md`) has been sys
 All unit, integration, and security test suites run via Vitest:
 
 ```powershell
-# Run the complete test suite (22 test files, 98 tests)
+# Run the complete test suite (23 test files, 100 tests)
 npm test --workspace=api
 
 # Run lint checks across API (oxlint) and Web (eslint)

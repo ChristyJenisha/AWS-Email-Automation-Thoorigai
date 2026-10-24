@@ -127,7 +127,7 @@ export function SignInView() {
           )}
 
           {/* Quick Demo Logins (Only visible when NEXT_PUBLIC_DEMO_MODE=true) */}
-          {process.env.NEXT_PUBLIC_DEMO_MODE === "true" && (
+          {isDemoMode && (
             <>
               <div style={{ marginBottom: 22 }}>
             <span

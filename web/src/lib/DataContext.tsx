@@ -46,10 +46,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const requestSeqRef = useRef(0);
 
   // Sign In function
-  const loginWithCredentials = useCallback(async (email: string, password = "demo123"): Promise<boolean> => {
+  const loginWithCredentials = useCallback(async (email: string, password?: string): Promise<boolean> => {
     setError(null);
     try {
-      const result = await loginApi(email, password);
+      const effectivePassword = password ?? (process.env.NEXT_PUBLIC_DEMO_MODE === "true" ? "demo123" : "");
+      const result = await loginApi(email, effectivePassword);
       if (result && isMountedRef.current) {
         setAuthToken(result.token);
         setCurrentUser(result.user);

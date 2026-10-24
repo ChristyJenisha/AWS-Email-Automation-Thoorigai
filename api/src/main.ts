@@ -5,6 +5,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
 import { AppModule } from './app.module.js';
 
 // Load .env if present
@@ -50,6 +51,9 @@ async function bootstrap() {
 
   // Trust proxy for reverse proxy headers (Cloudflare / Nginx / AWS ALB) (P1-7)
   app.set('trust proxy', 1);
+
+  // Global structured exception filter with request correlation IDs (P2-6)
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   // CORS allowlist configuration (P1-5)
   const defaultAllowedOrigins = [

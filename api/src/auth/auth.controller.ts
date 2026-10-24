@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from './auth.guard.js';
 import { AuthService } from './auth.service.js';
+import type { AuthedRequest } from './authed-request.interface.js';
 
 @Controller('auth')
 export class AuthController {
@@ -44,7 +45,7 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(AuthGuard)
-  me(@Req() request: any) {
+  me(@Req() request: AuthedRequest) {
     return request.user;
   }
 }

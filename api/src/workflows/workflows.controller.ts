@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { AuthService } from '../auth/auth.service.js';
+import type { AuthedRequest } from '../auth/authed-request.interface.js';
 import { CreateWorkflowDto, ReplaceWorkflowDto, WorkflowActionDto } from './workflow.dto.js';
 import { WorkflowTransitionsService } from './workflow-transitions.service.js';
 import { WorkflowsService } from './workflows.service.js';
@@ -29,27 +30,27 @@ export class WorkflowsController {
   ) {}
 
   @Get()
-  list(@Req() request: any, @Query('organizationId') organizationId?: string) {
+  list(@Req() request: AuthedRequest, @Query('organizationId') organizationId?: string) {
     this.authService.assertOrganizationAccess(request?.user, organizationId);
     return this.workflowsService.list(organizationId);
   }
 
   @Get(':id')
-  async get(@Req() request: any, @Param('id') id: string) {
+  async get(@Req() request: AuthedRequest, @Param('id') id: string) {
     const workflow = await this.workflowsService.get(id);
     this.authService.assertOrganizationAccess(request?.user, workflow.organizationId);
     return workflow;
   }
 
   @Post()
-  create(@Req() request: any, @Body() input: CreateWorkflowDto) {
+  create(@Req() request: AuthedRequest, @Body() input: CreateWorkflowDto) {
     this.authService.assertAdminAccess(request?.user);
     this.authService.assertOrganizationAccess(request?.user, input.organizationId);
     return this.workflowsService.create(input);
   }
 
   @Put(':id')
-  async replace(@Req() request: any, @Param('id') id: string, @Body() input: ReplaceWorkflowDto) {
+  async replace(@Req() request: AuthedRequest, @Param('id') id: string, @Body() input: ReplaceWorkflowDto) {
     this.authService.assertAdminAccess(request?.user);
     const workflow = await this.workflowsService.get(id);
     this.authService.assertOrganizationAccess(request?.user, workflow.organizationId);
@@ -57,7 +58,7 @@ export class WorkflowsController {
   }
 
   @Delete(':id')
-  async delete(@Req() request: any, @Param('id') id: string) {
+  async delete(@Req() request: AuthedRequest, @Param('id') id: string) {
     this.authService.assertAdminAccess(request?.user);
     const workflow = await this.workflowsService.get(id);
     this.authService.assertOrganizationAccess(request?.user, workflow.organizationId);
@@ -65,18 +66,18 @@ export class WorkflowsController {
   }
 
   @Get('steps/:stepInstanceId/approval-link')
-  async getApprovalLink(@Req() request: any, @Param('stepInstanceId') stepInstanceId: string) {
+  async getApprovalLink(@Req() request: AuthedRequest, @Param('stepInstanceId') stepInstanceId: string) {
     const link = await this.workflowTransitionsService.getApprovalLink(stepInstanceId);
     this.authService.assertOrganizationAccess(request?.user, link.organizationId);
     return { token: link.token, url: link.url, approverEmail: link.approverEmail };
   }
 
   @Post('steps/:stepInstanceId/complete')
-  completeStep(@Req() request: any, @Param('stepInstanceId') stepInstanceId: string, @Body() input: WorkflowActionDto) {
+  completeStep(@Req() request: AuthedRequest, @Param('stepInstanceId') stepInstanceId: string, @Body() input: WorkflowActionDto) {
     const actualRequest = typeof request === 'string' || request === undefined ? { user: undefined } : request;
     const actualStepInstanceId = typeof request === 'string' ? request : stepInstanceId;
     const actualInput = typeof request === 'string' ? (stepInstanceId as unknown as WorkflowActionDto) : input;
-    const actor = actualRequest?.user?.id ?? actualInput?.actor;
+    const actor = actualRequest?.user?.id ?? actualInput?.actor ?? 'system';
     const organizationId = actualRequest?.user?.organizationId;
 
     if (actualRequest?.user) {
@@ -87,11 +88,11 @@ export class WorkflowsController {
   }
 
   @Post('steps/:stepInstanceId/return')
-  returnStep(@Req() request: any, @Param('stepInstanceId') stepInstanceId: string, @Body() input: WorkflowActionDto) {
+  returnStep(@Req() request: AuthedRequest, @Param('stepInstanceId') stepInstanceId: string, @Body() input: WorkflowActionDto) {
     const actualRequest = typeof request === 'string' || request === undefined ? { user: undefined } : request;
     const actualStepInstanceId = typeof request === 'string' ? request : stepInstanceId;
     const actualInput = typeof request === 'string' ? (stepInstanceId as unknown as WorkflowActionDto) : input;
-    const actor = actualRequest?.user?.id ?? actualInput?.actor;
+    const actor = actualRequest?.user?.id ?? actualInput?.actor ?? 'system';
     const organizationId = actualRequest?.user?.organizationId;
 
     if (actualRequest?.user) {
