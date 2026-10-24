@@ -30,11 +30,11 @@ export async function onRequest(context) {
   const isApi = apiPaths.some((prefix) => url.pathname.startsWith(prefix));
 
   if (isApi) {
-    const backendOrigin = context.env.BACKEND_API_URL || 'http://13.126.39.176.nip.io';
+    const backendOrigin = context.env.BACKEND_API_URL || 'https://fact-heritage-qualified-grace.trycloudflare.com';
     const targetUrl = `${backendOrigin}${url.pathname}${url.search}`;
 
     const newHeaders = new Headers(context.request.headers);
-    newHeaders.set('host', '13.126.39.176.nip.io');
+    newHeaders.set('host', 'fact-heritage-qualified-grace.trycloudflare.com');
 
     const requestInit = {
       method: context.request.method,
