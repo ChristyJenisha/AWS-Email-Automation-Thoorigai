@@ -30,11 +30,11 @@ export async function onRequest(context) {
   const isApi = apiPaths.some((prefix) => url.pathname.startsWith(prefix));
 
   if (isApi) {
-    const backendOrigin = context.env.BACKEND_API_URL || 'http://13.126.39.176';
+    const backendOrigin = context.env.BACKEND_API_URL || 'http://13.126.39.176.nip.io';
     const targetUrl = `${backendOrigin}${url.pathname}${url.search}`;
 
     const newHeaders = new Headers(context.request.headers);
-    newHeaders.set('host', '13.126.39.176');
+    newHeaders.set('host', '13.126.39.176.nip.io');
 
     const requestInit = {
       method: context.request.method,
@@ -72,3 +72,4 @@ export async function onRequest(context) {
   // Not an API request -> serve frontend static pages
   return context.next();
 }
+
