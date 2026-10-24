@@ -1,7 +1,7 @@
 export async function onRequest(context) {
   const url = new URL(context.request.url);
 
-  // Handle CORS preflight requests
+  // 1. Handle CORS preflight requests
   if (context.request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -14,8 +14,7 @@ export async function onRequest(context) {
     });
   }
 
-  // Pure backend API routes: proxy to the EC2 backend via Cloudflare Tunnel
-  // Frontend pages (/batches, /payments, /settings, /approve, /legacy, /) are served statically
+  // 2. Pure backend API routes: proxy to the EC2 backend via Cloudflare Tunnel
   const isApi =
     url.pathname.startsWith('/api/') ||
     url.pathname === '/api' ||
@@ -64,6 +63,26 @@ export async function onRequest(context) {
     }
   }
 
-  // Not an API request -> serve frontend static pages
+  // 3. Frontend static page resolution:
+  // Match section routes and serve their index.html directly from ASSETS to prevent any 308 redirect loops
+  const cleanPath = url.pathname.replace(/\/$/, '');
+  const staticPages = ['/batches', '/payments', '/settings', '/approve', '/legacy'];
+  const matchedPage = staticPages.find((p) => cleanPath === p || cleanPath.startsWith(p + '/'));
+
+  if (matchedPage && context.env.ASSETS) {
+    const pageName = matchedPage.slice(1);
+    const assetUrl = new URL(`/${pageName}/index.html`, url.origin);
+    const assetRes = await context.env.ASSETS.fetch(assetUrl);
+    if (assetRes.status === 200) {
+      const newHeaders = new Headers(assetRes.headers);
+      newHeaders.set('Content-Type', 'text/html; charset=utf-8');
+      return new Response(assetRes.body, {
+        status: 200,
+        headers: newHeaders,
+      });
+    }
+  }
+
+  // Not an API or special page route -> serve frontend static assets
   return context.next();
 }

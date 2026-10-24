@@ -18,7 +18,7 @@ if (fs.existsSync(serverAppDir)) {
   console.log('✓ Copied server/app pages into .next root');
 }
 
-// 2. Create directory-based index.html files to avoid Cloudflare Pretty URL 308 redirect loops
+// 2. Create directory-based index.html files so both /page and /page/ have direct index.html assets
 const pages = ['batches', 'payments', 'settings', 'approve', 'legacy'];
 pages.forEach((page) => {
   const htmlFile = path.join(serverAppDir, `${page}.html`);
@@ -54,27 +54,19 @@ if (fs.existsSync(devDir)) {
   console.log('✓ Removed dev cache');
 }
 
-// 5. Create _redirects file for clean SPA client-side fallback (NO exact .html rewrites to prevent loops)
-const redirects = [
-  '/approve/* /approve/index.html 200',
-  '/batches/* /batches/index.html 200',
-  '/payments/* /payments/index.html 200',
-  '/settings/* /settings/index.html 200',
-  '/legacy/* /legacy/index.html 200',
-  '/* /index.html 200',
-].join('\n');
+// 5. Clean up any conflicting _redirects files
+const redirectsPath = path.join(nextDir, '_redirects');
+if (fs.existsSync(redirectsPath)) fs.unlinkSync(redirectsPath);
+const appRedirectsPath = path.join(serverAppDir, '_redirects');
+if (fs.existsSync(appRedirectsPath)) fs.unlinkSync(appRedirectsPath);
 
-fs.writeFileSync(path.join(nextDir, '_redirects'), redirects, 'utf8');
-if (fs.existsSync(serverAppDir)) {
-  fs.writeFileSync(path.join(serverAppDir, '_redirects'), redirects, 'utf8');
-}
-
-// 6. Populate web/dist with HTML, static directories and _redirects
+// 6. Populate web/dist with HTML and static directories
 fs.mkdirSync(distDir, { recursive: true });
 if (fs.existsSync(serverAppDir)) {
   fs.cpSync(serverAppDir, distDir, { recursive: true });
 }
-fs.writeFileSync(path.join(distDir, '_redirects'), redirects, 'utf8');
+const distRedirectsPath = path.join(distDir, '_redirects');
+if (fs.existsSync(distRedirectsPath)) fs.unlinkSync(distRedirectsPath);
 
-console.log('✓ Generated Cloudflare Pages _redirects and populated web/dist');
+console.log('✓ Populated web/dist cleanly without redirect conflict rules');
 console.log('[cf-postbuild] Done!');
