@@ -146,7 +146,7 @@ def create_report():
         ["Monorepo Production Build", "Clean Turbopack & Nest build", "Exit Code 0 (Asset Prep OK)", "100% PASSED"],
         ["Frontend Live Domain", "Cloudflare Pages Edge HTTPS", "HTTP 200 OK (Pretty URLs)", "ONLINE & VERIFIED"],
         ["Backend API Health", "Reverse Proxy & DB Status", "HTTP 200 OK (DB Connected)", "ONLINE & VERIFIED"],
-        ["Git Repository Sync", "Synchronize org and origin remotes", "Head Commit: da84250", "SYNCHRONIZED"]
+        ["Git Repository Sync", "Synchronize org and origin remotes", "Head Commit: 58f554b", "SYNCHRONIZED"]
     ]
     t_metrics = doc.add_table(rows=1, cols=4)
     format_table(t_metrics, metrics_widths, metrics_headers, metrics_data)
