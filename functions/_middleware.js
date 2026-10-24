@@ -14,20 +14,14 @@ export async function onRequest(context) {
     });
   }
 
-  const apiPaths = [
-    '/approvals',
-    '/auth',
-    '/workflows',
-    '/batches',
-    '/contacts',
-    '/payments',
-    '/bills',
-    '/notifications',
-    '/health',
-    '/api',
-  ];
-
-  const isApi = apiPaths.some((prefix) => url.pathname.startsWith(prefix));
+  // Pure backend API routes: proxy to the EC2 backend via Cloudflare Tunnel
+  // Frontend pages (/batches, /payments, /settings, /approve, /legacy, /) are served statically
+  const isApi =
+    url.pathname.startsWith('/api/') ||
+    url.pathname === '/api' ||
+    url.pathname === '/health' ||
+    url.pathname.startsWith('/auth/') ||
+    url.pathname.startsWith('/approvals/');
 
   if (isApi) {
     const backendOrigin = context.env.BACKEND_API_URL || 'https://fact-heritage-qualified-grace.trycloudflare.com';
@@ -73,4 +67,3 @@ export async function onRequest(context) {
   // Not an API request -> serve frontend static pages
   return context.next();
 }
-

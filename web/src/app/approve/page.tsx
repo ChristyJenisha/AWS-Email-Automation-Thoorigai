@@ -48,7 +48,7 @@ type ApprovalDetails = {
 
 function getApiBase(): string {
   if (typeof window !== "undefined") {
-    return process.env.NEXT_PUBLIC_API_URL ?? "";
+    return "/api";
   }
   return process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 }
