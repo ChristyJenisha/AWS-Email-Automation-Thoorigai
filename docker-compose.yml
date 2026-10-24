@@ -36,6 +36,7 @@ services:
       AWS_REGION: ap-south-1
       AWS_SDK_LOAD_CONFIG: "1"
     ports:
+      - "80:3001"
       - "${API_PORT:-3001}:3001"
     volumes:
       - ./api:/workspace/api
@@ -57,7 +58,6 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
       NEXT_PUBLIC_DEMO_MODE: ${NEXT_PUBLIC_DEMO_MODE:-${DEMO_MODE:-false}}
     ports:
-      - "80:3000"
       - "${WEB_PORT:-3000}:3000"
     volumes:
       - ./web:/workspace/web
