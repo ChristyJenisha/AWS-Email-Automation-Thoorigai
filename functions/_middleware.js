@@ -66,7 +66,7 @@ export async function onRequest(context) {
   // 3. Frontend static page resolution:
   // Match section routes and serve their index.html directly from ASSETS to prevent any 308 redirect loops
   const cleanPath = url.pathname.replace(/\/$/, '');
-  const staticPages = ['/batches', '/payments', '/settings', '/approve', '/legacy'];
+  const staticPages = ['/batches', '/payments', '/settings', '/approve'];
   const matchedPage = staticPages.find((p) => cleanPath === p || cleanPath.startsWith(p + '/'));
 
   if (matchedPage && context.env.ASSETS) {

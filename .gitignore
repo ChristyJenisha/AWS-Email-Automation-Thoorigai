@@ -1,14 +1,42 @@
+# Dependencies
 node_modules/
 **/node_modules/
+
+# Next.js Build & Outputs
 .next/
 **/.next/
 dist/
 coverage/
+
+# Local Storage & Logs
 api/local-storage/
 api/api/local-storage/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
 .env
 .env.*
 !.env.example
-npm-debug.log*
 
+# Sensitive & Binary Artifacts
+*.tar.gz
+*.exe
+*.pem
+*.key
+cloudflared*
+deploy_bundle*
+
+# Scratch & Temporary Folders
+scratch/
+**/scratch/
+
+# Reports (keep only official docs/ directory)
+*.docx
+!docs/*.docx
+
+# TypeScript & Cache
 api/tsconfig.build.tsbuildinfo
+.eslintcache

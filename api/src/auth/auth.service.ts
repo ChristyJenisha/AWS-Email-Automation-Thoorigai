@@ -117,7 +117,7 @@ export class AuthService {
 
   isDemoEnabled(): boolean {
     if (process.env.NODE_ENV === 'production') {
-      return process.env.DEMO_MODE === 'true';
+      return false;
     }
     return process.env.DEMO_MODE !== 'false';
   }
@@ -277,7 +277,14 @@ export class AuthService {
     }
   }
 
-  private getJwtSecret() {
-    return process.env.JWT_SECRET ?? 'bill-collection-demo-secret-change-me';
+  private getJwtSecret(): string {
+    const secret = process.env.JWT_SECRET;
+    if (!secret || secret.length < 32) {
+      if (process.env.NODE_ENV === 'test') {
+        return 'test-jwt-secret-at-least-32-characters-long';
+      }
+      throw new Error('JWT_SECRET must be set to at least 32 characters');
+    }
+    return secret;
   }
 }

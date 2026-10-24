@@ -19,7 +19,7 @@ if (fs.existsSync(serverAppDir)) {
 }
 
 // 2. Create directory-based index.html files so both /page and /page/ have direct index.html assets
-const pages = ['batches', 'payments', 'settings', 'approve', 'legacy'];
+const pages = ['batches', 'payments', 'settings', 'approve'];
 pages.forEach((page) => {
   const htmlFile = path.join(serverAppDir, `${page}.html`);
   if (fs.existsSync(htmlFile)) {

@@ -53,9 +53,7 @@ jobs:
 
       - name: Execute Remote Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
-        if: ${{ env.EC2_HOST != '' }}
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
+        if: ${{ secrets.EC2_HOST != '' }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER || 'ubuntu' }}

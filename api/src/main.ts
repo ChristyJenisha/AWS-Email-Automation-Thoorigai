@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module.js';
 
 // Load .env if present
@@ -15,13 +16,40 @@ for (const envPath of [resolve(process.cwd(), '.env'), resolve(process.cwd(), 'a
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // Production security checks (P1-1, P1-4)
+  if (process.env.NODE_ENV === 'production') {
+    if (process.env.DEMO_MODE === 'true') {
+      throw new Error('FATAL: DEMO_MODE cannot be enabled in production environments.');
+    }
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret || jwtSecret.length < 32) {
+      throw new Error('FATAL: JWT_SECRET environment variable must be set to at least 32 characters in production.');
+    }
+  }
+
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Trust proxy for reverse proxy headers (Cloudflare / Nginx / AWS ALB) (P1-7)
+  app.set('trust proxy', 1);
+
+  // CORS allowlist configuration (P1-5)
+  const defaultAllowedOrigins = [
+    'https://collectflow-app.pages.dev',
+    'https://thoorigaibilltracker.com',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+  ];
+  const envCors = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envCors]));
 
   app.enableCors({
-    origin: true,
+    origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   });
 
   const port = process.env.API_PORT ?? process.env.PORT ?? 3001;

@@ -110,8 +110,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  // Isolate no-auth approval portal and standalone legacy view: skip app shell to avoid UI duplication
-  if (isApproverRoute(pathname) || pathname === "/legacy" || pathname.startsWith("/legacy")) {
+  // Isolate no-auth approval portal: skip app shell to avoid UI duplication
+  if (isApproverRoute(pathname)) {
     return <main>{children}</main>;
   }
 
