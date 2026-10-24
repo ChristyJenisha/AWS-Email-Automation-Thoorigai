@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
@@ -18,14 +19,19 @@ for (const envPath of [resolve(process.cwd(), '.env'), resolve(process.cwd(), 'a
 }
 
 async function bootstrap() {
-  // Production security checks (P1-1, P1-4)
-  if (process.env.NODE_ENV === 'production') {
+  // Production security checks (P1-1, P1-4, P3-8)
+  const isProd = process.env.NODE_ENV === 'production';
+  if (isProd) {
     if (process.env.DEMO_MODE === 'true') {
       throw new Error('FATAL: DEMO_MODE cannot be enabled in production environments.');
     }
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret || jwtSecret.length < 32) {
       throw new Error('FATAL: JWT_SECRET environment variable must be set to at least 32 characters in production.');
+    }
+    const signingSecret = process.env.TOKEN_SIGNING_SECRET;
+    if (!signingSecret || signingSecret.length < 16) {
+      throw new Error('FATAL: TOKEN_SIGNING_SECRET must be set to at least 16 characters in production.');
     }
   }
 
@@ -65,8 +71,19 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Idempotency-Key', 'idempotency-key'],
   });
 
+  // Swagger OpenAPI Documentation (P2-8)
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('CollectFlow API')
+    .setDescription('Bill Collection Tracker API & Workflow Engine')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, swaggerDocument);
+
   const port = process.env.API_PORT ?? process.env.PORT ?? 3001;
   await app.listen(port);
   console.log(`[API_READY] Server listening on http://localhost:${port}`);
+  console.log(`[SWAGGER_READY] OpenAPI documentation active at http://localhost:${port}/api/docs`);
 }
 await bootstrap();

@@ -3,11 +3,12 @@ import { PrismaModule } from '../prisma/prisma.module.js';
 import { AuthController } from './auth.controller.js';
 import { AuthGuard } from './auth.guard.js';
 import { AuthService } from './auth.service.js';
+import { OrgScopedGuard } from './org-scoped.guard.js';
 
 @Module({
   imports: [PrismaModule],
   controllers: [AuthController],
-  providers: [AuthService, AuthGuard],
-  exports: [AuthService, AuthGuard],
+  providers: [AuthService, AuthGuard, OrgScopedGuard],
+  exports: [AuthService, AuthGuard, OrgScopedGuard],
 })
 export class AuthModule {}
