@@ -9,7 +9,7 @@ import {
 
 export function getApiBase(): string {
   if (typeof window !== "undefined") {
-    return "/api";
+    return "";
   }
   return process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 }

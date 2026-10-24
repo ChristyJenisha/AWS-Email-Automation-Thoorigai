@@ -47,7 +47,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // Sign In function
   const loginWithCredentials = useCallback(async (email: string, password = "demo123"): Promise<boolean> => {
-    setIsLoading(true);
     setError(null);
     try {
       const result = await loginApi(email, password);
@@ -64,10 +63,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setError(err instanceof Error ? err.message : "Sign-in failed");
       }
       return false;
-    } finally {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
     }
   }, []);
 

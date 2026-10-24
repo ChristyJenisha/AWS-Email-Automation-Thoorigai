@@ -31,7 +31,8 @@ export async function onRequest(context) {
 
   if (isApi) {
     const backendOrigin = context.env.BACKEND_API_URL || 'https://fact-heritage-qualified-grace.trycloudflare.com';
-    const targetUrl = `${backendOrigin}${url.pathname}${url.search}`;
+    const targetPath = url.pathname.replace(/^\/api(?=\/|$)/, '') || '/';
+    const targetUrl = `${backendOrigin}${targetPath}${url.search}`;
 
     const newHeaders = new Headers(context.request.headers);
     newHeaders.set('host', 'fact-heritage-qualified-grace.trycloudflare.com');
