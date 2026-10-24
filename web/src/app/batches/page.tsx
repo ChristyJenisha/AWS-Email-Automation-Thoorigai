@@ -475,6 +475,81 @@ function BatchesContent() {
           ))}
         </div>
 
+        {/* Payment Waiting Process Alert Banner */}
+        {counts.READY_FOR_PAYMENT > 0 && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: "16px 20px",
+              borderRadius: "var(--radius-lg)",
+              border: "1px solid var(--status-info-border)",
+              background: "var(--status-info-bg)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 14,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: "50%",
+                  background: "var(--brand-primary)",
+                  color: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  boxShadow: "0 2px 6px rgba(15,118,110,0.25)",
+                }}
+              >
+                <CreditCard size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>{counts.READY_FOR_PAYMENT} Batch{counts.READY_FOR_PAYMENT === 1 ? "" : "es"} Ready for Payment Recording</span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      padding: "2px 8px",
+                      borderRadius: "var(--radius-full)",
+                      background: "var(--status-info-text)",
+                      color: "#ffffff",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Waiting Process
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 3 }}>
+                  All approval stages are 100% verified. Action required: Record bank disbursement details, transaction UTR, and upload receipts to settle invoices.
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => router.push("/payments")}
+              className="ui-button ui-button--primary"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 18px",
+                fontSize: 13,
+                fontWeight: 600,
+                boxShadow: "0 2px 4px rgba(15,118,110,0.2)",
+              }}
+            >
+              <CreditCard size={15} />
+              <span>Record Payment in Waiting Process &rarr;</span>
+            </button>
+          </div>
+        )}
+
         {/* Search & Approver Select */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
           {/* Search Box */}

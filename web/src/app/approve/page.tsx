@@ -48,7 +48,7 @@ type ApprovalDetails = {
 
 function getApiBase(): string {
   if (typeof window !== "undefined") {
-    return "";
+    return process.env.NEXT_PUBLIC_API_URL ?? "";
   }
   return process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 }
@@ -63,6 +63,7 @@ const formatCurrency = (amount: number | string) =>
 export default function ApprovalPage() {
   const apiBase = getApiBase();
   const tokenRef = useRef("");
+  const autoVerifyAttemptedRef = useRef(false);
   const [details, setDetails] = useState<ApprovalDetails | null>(null);
   const [comment, setComment] = useState("");
   const [notice, setNotice] = useState("");
@@ -100,7 +101,10 @@ export default function ApprovalPage() {
   }, [resendCooldown]);
 
   useEffect(() => {
-    const approvalToken = new URLSearchParams(window.location.search).get("token");
+    const urlParams = new URLSearchParams(window.location.search);
+    const approvalToken = urlParams.get("token");
+    const autoOtp = urlParams.get("otp") || urlParams.get("code");
+
     if (!approvalToken) {
       void Promise.resolve().then(() => {
         setError("This approval link is missing its token. Ask the sender for a new link.");
@@ -135,7 +139,15 @@ export default function ApprovalPage() {
             setNotice("All approval stages for this batch have already been completed!");
           }
         } else {
-          setNotice("A 6-digit verification code has been dispatched to your registered approver email. Please enter the code below to authorize.");
+          const cleanCode = autoOtp?.trim();
+          if (cleanCode && /^\d{6}$/.test(cleanCode) && !autoVerifyAttemptedRef.current) {
+            autoVerifyAttemptedRef.current = true;
+            setOtpCode(cleanCode);
+            setNotice("⚡ Automatic Magic Link: Authenticating 6-digit identity code...");
+            void verifyOtp(cleanCode, approvalToken);
+          } else if (!cleanCode) {
+            setNotice("A 6-digit verification code has been dispatched to your registered approver email. Please enter the code below to authorize.");
+          }
         }
       })
       .catch((requestError: unknown) => {
@@ -189,8 +201,12 @@ export default function ApprovalPage() {
     }
   }
 
-  async function verifyOtp(codeToVerify?: string) {
+  async function verifyOtp(codeToVerify?: string, tokenOverride?: string) {
+    if (actionToken || isOtpVerified) {
+      return;
+    }
     const code = (codeToVerify || otpCode).trim();
+    const token = tokenOverride || tokenRef.current;
     if (!code || !/^\d{6}$/.test(code)) {
       setError("Please enter a valid 6-digit verification code.");
       return;
@@ -202,7 +218,7 @@ export default function ApprovalPage() {
       const response = await fetch(`${apiBase}/approvals/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: tokenRef.current, code }),
+        body: JSON.stringify({ token, code }),
       });
 
       if (!response.ok) {
@@ -211,9 +227,10 @@ export default function ApprovalPage() {
       }
 
       const data = (await response.json()) as { actionToken: string };
+      setError("");
       setActionToken(data.actionToken);
       setIsOtpVerified(true);
-      setNotice("Identity verified successfully! You may now review each bill and submit approval.");
+      setNotice("✓ Identity verified automatically via Magic Link! You may now review each bill and submit approval.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verification failed.");
     } finally {
@@ -610,10 +627,37 @@ export default function ApprovalPage() {
               <div>
                 <span className={`status-pill ${isOtpVerified ? "status-connected" : "status-alerted"}`}>
                   <i />
-                  {isOtpVerified ? "Identity Verified" : "OTP Verification Required"}
+                  {isOtpVerified ? "✓ Identity Verified" : "OTP Verification Required"}
                 </span>
               </div>
             </div>
+
+            {/* OTP Automatically Verified Banner */}
+            {isOtpVerified && (
+              <div
+                style={{
+                  background: "var(--brand-light)",
+                  border: "1px solid var(--brand-border)",
+                  borderRadius: "var(--radius-lg)",
+                  padding: "16px 20px",
+                  margin: "20px 0",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 14,
+                  boxShadow: "var(--shadow-sm)",
+                }}
+              >
+                <ShieldCheck size={24} style={{ color: "var(--brand-primary)", flexShrink: 0 }} />
+                <div>
+                  <h4 style={{ margin: "0 0 2px 0", fontSize: "1rem", color: "var(--brand-primary)", fontWeight: 750 }}>
+                    Identity Automatically Authenticated
+                  </h4>
+                  <p style={{ margin: 0, fontSize: "0.88rem", color: "var(--text-secondary)" }}>
+                    Your 6-digit verification code was automatically recognized and authenticated from the secure link. All approval actions are unlocked below.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* OTP Security Verification Step */}
             {!isOtpVerified && (

@@ -48,10 +48,6 @@ export class RemindersService {
     });
 
     try {
-      const token = this.workflowTransitions.generateApprovalToken(step.id, approver.id, step.batch.organizationId);
-      const approvalUrl = new URL('/approve', process.env.APPROVAL_APP_URL ?? 'http://localhost:3000');
-      approvalUrl.searchParams.set('token', token); console.log('[APPROVAL_URL_DEBUG] hasToken=', approvalUrl.searchParams.has('token'), 'url=', approvalUrl.origin + approvalUrl.pathname + '?token-present');
-
       let initialOtpCode: string | undefined;
       if (typeof (this.workflowTransitions as any).issueApprovalOtp === 'function') {
         try {
@@ -62,6 +58,14 @@ export class RemindersService {
         }
       }
 
+      const token = this.workflowTransitions.generateApprovalToken(step.id, approver.id, step.batch.organizationId);
+      const approvalUrl = new URL('/approve', process.env.APPROVAL_APP_URL ?? 'http://localhost:3000');
+      approvalUrl.searchParams.set('token', token);
+      if (initialOtpCode) {
+        approvalUrl.searchParams.set('otp', initialOtpCode);
+      }
+      console.log('[APPROVAL_URL_DEBUG] hasToken=', approvalUrl.searchParams.has('token'), 'url=', approvalUrl.origin + approvalUrl.pathname + '?token-present');
+
       const html = buildApprovalEmailHtml({
         headline: 'Action Required: Stage 1 Workflow Approval',
         recipientName: approver.name,
@@ -71,8 +75,8 @@ export class RemindersService {
         otpCode: initialOtpCode,
         otpExpiresMinutes: 30,
         ctaUrl: approvalUrl.toString(),
-        ctaText: 'Review & Approve Batch →',
-        subNotice: 'Click above to open the batch details. Then manually enter your 6-digit verification code to confirm approval.',
+        ctaText: 'Review & Approve Batch (Auto-Verify OTP) →',
+        subNotice: 'Click above to securely open and automatically verify your authorization. The single-use verification code is applied automatically.',
       });
 
       await this.emailService.sendReminderEmail({
@@ -99,6 +103,9 @@ export class RemindersService {
             process.env.APPROVAL_APP_URL ?? 'http://localhost:3000',
           );
           backupApprovalUrl.searchParams.set('token', backupToken);
+          if (initialOtpCode) {
+            backupApprovalUrl.searchParams.set('otp', initialOtpCode);
+          }
 
           const backupHtml = buildApprovalEmailHtml({
             headline: 'Action Required (Backup Approver): Stage 1 Workflow Approval',
@@ -110,9 +117,9 @@ export class RemindersService {
             otpCode: initialOtpCode,
             otpExpiresMinutes: 30,
             ctaUrl: backupApprovalUrl.toString(),
-            ctaText: 'Review & Approve Batch →',
+            ctaText: 'Review & Approve Batch (Auto-Verify OTP) →',
             subNotice:
-              'Click above to open the batch details. Then manually enter your 6-digit verification code to confirm approval.',
+              'Click above to securely open and automatically verify your authorization. The single-use verification code is applied automatically.',
           });
 
           await this.emailService.sendReminderEmail({
@@ -315,10 +322,13 @@ export class RemindersService {
     return results;
   }
 
-  private createApprovalUrl(stepInstanceId: string, actorId: string, organizationId: string): string {
+  private createApprovalUrl(stepInstanceId: string, actorId: string, organizationId: string, otpCode?: string): string {
     const token = this.workflowTransitions.generateApprovalToken(stepInstanceId, actorId, organizationId);
     const approvalUrl = new URL('/approve', process.env.APPROVAL_APP_URL ?? 'http://localhost:3000');
-    approvalUrl.searchParams.set('token', token); console.log('[APPROVAL_URL_DEBUG] hasToken=', approvalUrl.searchParams.has('token'), 'url=', approvalUrl.origin + approvalUrl.pathname + '?token-present');
+    approvalUrl.searchParams.set('token', token);
+    if (otpCode) {
+      approvalUrl.searchParams.set('otp', otpCode);
+    }
     return approvalUrl.toString();
   }
 
