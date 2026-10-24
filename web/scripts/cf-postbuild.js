@@ -37,8 +37,18 @@ if (fs.existsSync(devDir)) {
   console.log('✓ Removed dev cache');
 }
 
-// 4. Create _redirects file for clean SPA routing on Cloudflare Pages
+// 4. Create _redirects file for clean SPA routing & API proxying on Cloudflare Pages
 const redirects = [
+  '/api/* http://13.126.39.176/api/:splat 200',
+  '/approvals/* http://13.126.39.176/approvals/:splat 200',
+  '/auth/* http://13.126.39.176/auth/:splat 200',
+  '/batches/* http://13.126.39.176/batches/:splat 200',
+  '/bills/* http://13.126.39.176/bills/:splat 200',
+  '/payments/* http://13.126.39.176/payments/:splat 200',
+  '/contacts/* http://13.126.39.176/contacts/:splat 200',
+  '/workflows/* http://13.126.39.176/workflows/:splat 200',
+  '/notifications/* http://13.126.39.176/notifications/:splat 200',
+  '/health http://13.126.39.176/health 200',
   '/approve /approve.html 200',
   '/batches /batches.html 200',
   '/payments /payments.html 200',
