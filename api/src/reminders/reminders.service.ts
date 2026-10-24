@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { NotificationStatus, StepStatus } from '@prisma/client';
+import { NotificationStatus, Role, StepStatus } from '@prisma/client';
 import { EmailService, buildApprovalEmailHtml } from '../email/email.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WorkflowTransitionsService } from '../workflows/workflow-transitions.service.js';
@@ -20,8 +20,8 @@ export class RemindersService {
       include: {
         stage: {
           include: {
-            contact: { select: { id: true, email: true, name: true } },
-            backupContact: { select: { id: true, email: true, name: true } },
+            contact: { select: { id: true, email: true, name: true, isActive: true } },
+            backupContact: { select: { id: true, email: true, name: true, isActive: true } },
           },
         },
         batch: { select: { organizationId: true } },
@@ -29,8 +29,8 @@ export class RemindersService {
     });
 
     if (!step) return { status: 'skipped' as const, reason: 'no_active_step' };
-    const contactActive = (step.stage.contact as any)?.isActive !== false;
-    const backupActive = (step.stage.backupContact as any)?.isActive !== false;
+    const contactActive = step.stage.contact?.isActive !== false;
+    const backupActive = step.stage.backupContact?.isActive !== false;
     const approver = (contactActive && step.stage.contact?.email)
       ? step.stage.contact
       : (backupActive && step.stage.backupContact?.email)
@@ -184,8 +184,8 @@ export class RemindersService {
       include: {
         stage: {
           include: {
-            contact: { select: { id: true, email: true } },
-            backupContact: { select: { id: true, email: true } },
+            contact: { select: { id: true, email: true, isActive: true } },
+            backupContact: { select: { id: true, email: true, isActive: true } },
           },
         },
         batch: {
@@ -194,7 +194,7 @@ export class RemindersService {
             organization: {
               select: {
                 contacts: {
-                  where: { isActive: true, role: { contains: 'admin', mode: 'insensitive' } },
+                  where: { isActive: true, role: Role.ADMIN },
                   select: { id: true, email: true },
                 },
               },
@@ -213,8 +213,8 @@ export class RemindersService {
     }> = [];
 
     for (const step of dueSteps) {
-      const contactActive = (step.stage.contact as any)?.isActive !== false;
-      const backupActive = (step.stage.backupContact as any)?.isActive !== false;
+      const contactActive = step.stage.contact?.isActive !== false;
+      const backupActive = step.stage.backupContact?.isActive !== false;
       const approver = (contactActive && step.stage.contact?.email)
         ? step.stage.contact
         : (backupActive && step.stage.backupContact?.email)

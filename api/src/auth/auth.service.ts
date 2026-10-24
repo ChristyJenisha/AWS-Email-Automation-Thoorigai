@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -110,7 +111,8 @@ export class AuthService {
 
   assertAdminAccess(user: Pick<AppUser, 'role'> | undefined): void {
     if (!user) throw new UnauthorizedException('Authentication required');
-    if (user.role.toLowerCase() !== 'admin') {
+    const role = String(user.role).trim().toUpperCase();
+    if (role !== 'ADMIN') {
       throw new ForbiddenException('Administrator access is required');
     }
   }
@@ -168,7 +170,7 @@ export class AuthService {
                 organizationId: org.id,
                 name: bootstrapAdmin.name,
                 email: bootstrapAdmin.email,
-                role: 'Admin',
+                role: Role.ADMIN,
                 isActive: true,
               },
               include: { organization: true },

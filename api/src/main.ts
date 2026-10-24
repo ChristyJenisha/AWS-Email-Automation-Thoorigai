@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
 
 // Load .env if present
@@ -29,6 +31,17 @@ async function bootstrap() {
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  // Security headers with Helmet (P1-6)
+  app.use(
+    helmet({
+      contentSecurityPolicy: false, // CSP managed at reverse proxy/Pages layer to allow API responses
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
+
+  // Cookie parser for secure httpOnly session cookies (P1-8)
+  app.use(cookieParser());
+
   // Trust proxy for reverse proxy headers (Cloudflare / Nginx / AWS ALB) (P1-7)
   app.set('trust proxy', 1);
 
@@ -49,7 +62,7 @@ async function bootstrap() {
     origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Idempotency-Key', 'idempotency-key'],
   });
 
   const port = process.env.API_PORT ?? process.env.PORT ?? 3001;

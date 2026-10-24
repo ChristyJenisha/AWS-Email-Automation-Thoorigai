@@ -1,4 +1,5 @@
-import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Role } from '@prisma/client';
+import { IsBoolean, IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateContactDto {
   @IsString()
@@ -13,10 +14,8 @@ export class CreateContactDto {
   @IsEmail()
   email!: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(80)
-  role!: string;
+  @IsEnum(Role)
+  role!: Role;
 }
 
 export class UpdateContactDto {
@@ -31,10 +30,8 @@ export class UpdateContactDto {
   email?: string;
 
   @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(80)
-  role?: string;
+  @IsEnum(Role)
+  role?: Role;
 
   @IsOptional()
   @IsBoolean()

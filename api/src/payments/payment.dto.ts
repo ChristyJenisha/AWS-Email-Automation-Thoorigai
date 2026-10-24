@@ -55,6 +55,11 @@ export class CreatePaymentDto {
   reference?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  idempotencyKey?: string;
+
+  @IsOptional()
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })

@@ -1,9 +1,17 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { BatchStatus } from '@prisma/client';
+import { BatchStatus, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateContactDto, UpdateContactDto } from './contact.dto.js';
 
 const contactFields = { id: true, organizationId: true, name: true, email: true, role: true, isActive: true } as const;
+
+export function parseRole(roleInput?: string): Role {
+  if (!roleInput) return Role.APPROVER;
+  const upper = String(roleInput).trim().toUpperCase().replace(/[\s_-]+/g, '_');
+  if (upper === 'ADMIN') return Role.ADMIN;
+  if (upper === 'BACKUP_APPROVER' || upper.includes('BACKUP')) return Role.BACKUP_APPROVER;
+  return Role.APPROVER;
+}
 
 @Injectable()
 export class ContactsService {
@@ -30,7 +38,7 @@ export class ContactsService {
         organizationId: input.organizationId,
         name: input.name.trim(),
         email,
-        role: input.role.trim(),
+        role: parseRole(input.role),
       },
       select: contactFields,
     });
@@ -54,7 +62,7 @@ export class ContactsService {
     const data = {
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.email !== undefined ? { email: input.email.trim().toLowerCase() } : {}),
-      ...(input.role !== undefined ? { role: input.role.trim() } : {}),
+      ...(input.role !== undefined ? { role: parseRole(input.role) } : {}),
       ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
     };
     if (Object.keys(data).length === 0) throw new ConflictException('Provide at least one contact field to update');
@@ -117,4 +125,3 @@ export class ContactsService {
     return { message: `Contact "${contact.name}" deleted permanently`, id };
   }
 }
-

@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Header,
+  Headers,
   Param,
   PayloadTooLargeException,
   Post,
@@ -46,39 +47,29 @@ export class PaymentsController {
     @Req() request: any,
     @Param('batchId') batchId: string,
   ) {
-    const batch =
-      await this.paymentsService.getBatch(batchId);
+    const batch = await this.paymentsService.getBatch(batchId);
 
-    this.authService.assertOrganizationAccess(
-      request?.user,
-      batch.organizationId,
-    );
+    this.authService.assertOrganizationAccess(request?.user, batch.organizationId);
 
-    return this.paymentsService.listByBatch(
-      batchId,
-    );
+    return this.paymentsService.listByBatch(batchId);
   }
 
   @Post()
   async create(
     @Req() request: any,
     @Body() input: CreatePaymentDto,
+    @Headers('idempotency-key') idempotencyKeyHeader?: string,
   ) {
     this.authService.assertAdminAccess(request?.user);
-    const batch =
-      await this.paymentsService.getBatch(
-        input.batchId,
-      );
+    const batch = await this.paymentsService.getBatch(input.batchId);
 
-    this.authService.assertOrganizationAccess(
-      request?.user,
-      batch.organizationId,
-    );
+    this.authService.assertOrganizationAccess(request?.user, batch.organizationId);
 
-    return this.paymentsService.create(
-      input,
-      request.user.id,
-    );
+    const idempotencyKey = input.idempotencyKey || idempotencyKeyHeader || request?.headers?.['idempotency-key'];
+    if (idempotencyKey) {
+      input.idempotencyKey = String(idempotencyKey).trim();
+    }
+    return this.paymentsService.create(input, request.user.id);
   }
 
   @Post(':paymentId/proof-upload-url')
@@ -88,20 +79,11 @@ export class PaymentsController {
     @Body() input: CreatePaymentProofUploadUrlDto,
   ) {
     this.authService.assertAdminAccess(request?.user);
-    const payment =
-      await this.paymentsService.getPayment(
-        paymentId,
-      );
+    const payment = await this.paymentsService.getPayment(paymentId);
 
-    this.authService.assertOrganizationAccess(
-      request?.user,
-      payment.batch.organizationId,
-    );
+    this.authService.assertOrganizationAccess(request?.user, payment.batch.organizationId);
 
-    return this.paymentsService.createProofUploadUrl(
-      paymentId,
-      input.contentType,
-    );
+    return this.paymentsService.createProofUploadUrl(paymentId, input.contentType);
   }
 
   @Put(':paymentId/proof-file')
@@ -138,10 +120,7 @@ export class PaymentsController {
     this.authService.assertAdminAccess(request?.user);
     const payment = await this.paymentsService.getPayment(paymentId);
 
-    this.authService.assertOrganizationAccess(
-      request?.user,
-      payment.batch.organizationId,
-    );
+    this.authService.assertOrganizationAccess(request?.user, payment.batch.organizationId);
 
     return this.paymentsService.createProofDownloadUrl(paymentId);
   }
@@ -171,10 +150,7 @@ export class PaymentsController {
     this.authService.assertAdminAccess(request?.user);
     const payment = await this.paymentsService.getPayment(paymentId);
 
-    this.authService.assertOrganizationAccess(
-      request?.user,
-      payment.batch.organizationId,
-    );
+    this.authService.assertOrganizationAccess(request?.user, payment.batch.organizationId);
 
     return this.paymentsService.confirmProofUpload(paymentId, input.key);
   }
@@ -186,20 +162,10 @@ export class PaymentsController {
     @Body() input: AllocateOnAccountPaymentDto,
   ) {
     this.authService.assertAdminAccess(request?.user);
-    const payment =
-      await this.paymentsService.getPayment(
-        paymentId,
-      );
+    const payment = await this.paymentsService.getPayment(paymentId);
 
-    this.authService.assertOrganizationAccess(
-      request?.user,
-      payment.batch.organizationId,
-    );
+    this.authService.assertOrganizationAccess(request?.user, payment.batch.organizationId);
 
-    return this.paymentsService.allocateOnAccount(
-      paymentId,
-      input.allocations,
-      request.user.id,
-    );
+    return this.paymentsService.allocateOnAccount(paymentId, input.allocations, request.user.id);
   }
 }

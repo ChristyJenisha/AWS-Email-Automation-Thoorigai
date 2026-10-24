@@ -1,4 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ContactsService } from './contacts.service.js';
@@ -51,7 +52,7 @@ describe('ContactsService', () => {
     await service.create({ organizationId: 'org-1', name: '  Approver  ', email: ' Approver@Example.com ', role: ' Approver ' });
 
     expect(prisma.contact.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: { organizationId: 'org-1', name: 'Approver', email: 'approver@example.com', role: 'Approver' },
+      data: { organizationId: 'org-1', name: 'Approver', email: 'approver@example.com', role: Role.APPROVER },
     }));
   });
 

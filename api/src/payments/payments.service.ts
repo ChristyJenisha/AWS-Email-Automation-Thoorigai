@@ -87,6 +87,16 @@ export class PaymentsService {
   }
 
   async create(input: CreatePaymentDto, actor: string) {
+    const idempotencyKey = input.idempotencyKey?.trim() || undefined;
+    if (idempotencyKey) {
+      const existing = await this.prisma.payment.findUnique({
+        where: { idempotencyKey },
+        include: paymentDetails,
+      });
+      if (existing) {
+        return existing;
+      }
+    }
     const allocations = input.allocations ?? [];
 
     const billIds = allocations.map(
@@ -134,7 +144,8 @@ export class PaymentsService {
       );
     }
 
-    return this.prisma.$transaction(
+    try {
+      return await this.prisma.$transaction(
       async (transaction) => {
         const batch = await transaction.batch.findUnique({
           where: { id: input.batchId },
@@ -207,6 +218,7 @@ export class PaymentsService {
               reference:
                 input.reference?.trim() ||
                 undefined,
+              idempotencyKey,
               allocations: {
                 create: allocations.map(
                   (allocation) => ({
@@ -344,6 +356,16 @@ export class PaymentsService {
         return payment;
       },
     );
+    } catch (error: any) {
+      if (idempotencyKey && (error?.code === 'P2002' || error?.message?.includes('idempotency_key'))) {
+        const existing = await this.prisma.payment.findUnique({
+          where: { idempotencyKey },
+          include: paymentDetails,
+        });
+        if (existing) return existing;
+      }
+      throw error;
+    }
   }
 
   // --------------------------------------------------

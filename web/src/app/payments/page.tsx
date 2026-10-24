@@ -295,12 +295,19 @@ export default function PaymentsPage() {
         ...(line.deductionAmount > 0 ? { deductionAmount: line.deductionAmount, deductionType: line.deductionType } : {}),
       }));
 
+      const idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `pay-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
       const response = await authFetch(
         onAccountPaymentId ? `${apiBase}/payments/${onAccountPaymentId}/allocations` : `${apiBase}/payments`,
         authToken,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": idempotencyKey,
+          },
           body: JSON.stringify(
             onAccountPaymentId
               ? { allocations: allocationPayload }
@@ -309,6 +316,7 @@ export default function PaymentsPage() {
                   amount: paymentTotalCents / 100,
                   paidAt: paymentDate,
                   reference: paymentReference.trim() || undefined,
+                  idempotencyKey,
                   ...(isOnAccountEntry ? {} : { allocations: allocationPayload }),
                 }
           ),

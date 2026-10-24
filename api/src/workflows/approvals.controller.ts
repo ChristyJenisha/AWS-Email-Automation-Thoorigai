@@ -1,4 +1,5 @@
 import { Body, Controller, Post, Req, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { WorkflowTransitionsService } from './workflow-transitions.service.js';
 
@@ -40,6 +41,7 @@ export class ApprovalsController {
   constructor(private readonly transitions: WorkflowTransitionsService) {}
 
   @Post('complete')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   complete(@Body() input: ApprovalTokenActionDto, @Req() req?: any) {
     const requireOtp = process.env.REQUIRE_APPROVAL_OTP !== 'false';
     const approval = this.transitions.verifyApprovalToken(input.token, requireOtp);
@@ -53,21 +55,25 @@ export class ApprovalsController {
   }
 
   @Post('inspect')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   inspect(@Body() input: ApprovalTokenActionDto) {
     return this.transitions.inspectApprovalToken(input.token);
   }
 
   @Post('request-otp')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   requestOtp(@Body() input: ApprovalOtpRequestDto) {
     return this.transitions.requestApprovalOtp(input.token);
   }
 
   @Post('verify-otp')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   verifyOtp(@Body() input: ApprovalOtpVerifyDto) {
     return this.transitions.verifyApprovalOtp(input.token, input.code);
   }
 
   @Post('return')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   returnToPrevious(@Body() input: ApprovalTokenActionDto, @Req() req?: any) {
     const requireOtp = process.env.REQUIRE_APPROVAL_OTP !== 'false';
     const approval = this.transitions.verifyApprovalToken(input.token, requireOtp);
@@ -83,6 +89,7 @@ export class ApprovalsController {
   }
 
   @Post('reassign')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   reassign(@Body() input: ApprovalReassignDto, @Req() req?: any) {
     const ip = req?.ip || 'unknown';
     const userAgent = (req?.headers?.['user-agent'] as string) || 'unknown';
