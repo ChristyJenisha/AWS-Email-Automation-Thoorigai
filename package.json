@@ -7,10 +7,10 @@
     "web"
   ],
   "scripts": {
-    "dev": "concurrently -k -n api,web -c cyan,green \"npm run start:dev --workspace=api\" \"npm run dev --workspace=web\"",
-    "build": "npm run build --workspace=api && npm run build --workspace=web",
-    "lint": "npm run lint --workspace=api && npm run lint --workspace=web",
-    "test": "npm test --workspace=api && npm test --workspace=web",
+    "dev": "concurrently -k -n api,web -c cyan,green \"npm --prefix api run start:dev\" \"npm --prefix web run dev\"",
+    "build": "npm --prefix api run build && npm --prefix web run build",
+    "lint": "npm --prefix api run lint && npm --prefix web run lint",
+    "test": "npm --prefix api test && npm --prefix web test",
     "format": "prettier --write \"api/src/**/*.ts\" \"web/src/**/*.{ts,tsx}\"",
     "prepare": "husky"
   },
