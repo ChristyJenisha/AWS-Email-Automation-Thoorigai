@@ -1,42 +1,48 @@
-import { describe, expect, it, vi } from 'vitest';
-import { AuthService } from '../auth/auth.service.js';
-import { WorkflowTransitionsService } from '../workflows/workflow-transitions.service.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BatchesController } from './batches.controller.js';
-import { BatchesService } from './batches.service.js';
 
 describe('BatchesController', () => {
-  const batchesService = {
-    list: vi.fn(),
-    get: vi.fn(),
-    getHistory: vi.fn(),
-    create: vi.fn(),
-    delete: vi.fn(),
+  let controller: BatchesController;
+  let batchesService: {
+    list: ReturnType<typeof vi.fn>;
+    get: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
   };
-  const authService = {
-    assertOrganizationAccess: vi.fn(),
-    assertAdminAccess: vi.fn(),
+  let authService: {
+    assertOrganizationAccess: ReturnType<typeof vi.fn>;
+    assertAdminAccess: ReturnType<typeof vi.fn>;
   };
-  const transitions = {
-    confirmOnBehalf: vi.fn(),
-    reassignStep: vi.fn(),
-  };
+  let transitions: any;
 
-  const controller = new BatchesController(
-    batchesService as unknown as BatchesService,
-    authService as unknown as AuthService,
-    transitions as unknown as WorkflowTransitionsService,
-  );
+  beforeEach(() => {
+    batchesService = {
+      list: vi.fn(),
+      get: vi.fn(),
+      create: vi.fn(),
+      delete: vi.fn(),
+    };
+    authService = {
+      assertOrganizationAccess: vi.fn(),
+      assertAdminAccess: vi.fn(),
+    };
+    transitions = {
+      confirmOnBehalf: vi.fn(),
+      reassignStep: vi.fn(),
+    };
+    controller = new BatchesController(batchesService as any, authService as any, transitions);
+  });
 
   it('enforces admin access and organization access on batch creation', async () => {
+    const user = { id: 'admin-1', role: 'Admin', organizationId: 'org-1' };
     const input = {
       organizationId: 'org-1',
-      templateId: 'template-1',
-      bills: [{ billNumber: 'INV-1', amount: 500, dueDate: '2026-11-01' }],
+      templateId: 'tpl-1',
+      bills: [{ billNumber: 'INV-1', amount: 500 }],
     };
-    const user = { id: 'admin-1', role: 'Admin', organizationId: 'org-1' };
     batchesService.create.mockResolvedValue({ id: 'batch-1' });
 
-    const result = await controller.create({ user }, input as any);
+    const result = await controller.create({ user } as any, input as any);
 
     expect(authService.assertAdminAccess).toHaveBeenCalledWith(user);
     expect(authService.assertOrganizationAccess).toHaveBeenCalledWith(user, 'org-1');
@@ -49,12 +55,11 @@ describe('BatchesController', () => {
     batchesService.get.mockResolvedValue({ id: 'batch-1', organizationId: 'org-1' });
     batchesService.delete.mockResolvedValue({ id: 'batch-1' });
 
-    const result = await controller.delete({ user }, 'batch-1');
+    const result = await controller.delete({ user } as any, 'batch-1');
 
     expect(authService.assertAdminAccess).toHaveBeenCalledWith(user);
     expect(authService.assertOrganizationAccess).toHaveBeenCalledWith(user, 'org-1');
-    expect(batchesService.delete).toHaveBeenCalledWith('batch-1');
+    expect(batchesService.delete).toHaveBeenCalledWith('batch-1', 'admin-1');
     expect(result).toEqual({ id: 'batch-1' });
   });
 });
-

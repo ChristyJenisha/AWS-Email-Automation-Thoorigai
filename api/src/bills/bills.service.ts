@@ -48,7 +48,8 @@ export class BillsService {
 
     return this.prisma.bill.findMany({
       where: {
-        batch: { organizationId },
+        batch: { organizationId, deletedAt: null },
+        deletedAt: null,
       },
       include: {
         batch: {

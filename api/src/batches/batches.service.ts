@@ -34,7 +34,7 @@ export class BatchesService {
     }
 
     return this.prisma.batch.findMany({
-      where: { organizationId },
+      where: { organizationId, deletedAt: null },
       include: batchDetails,
       orderBy: { createdAt: 'desc' },
     });
@@ -174,35 +174,35 @@ export class BatchesService {
     await this.remindersService.sendInitialApproval(batch.id);
     return batch;
   }
-async delete(id: string) {
+  async delete(id: string, actorId = 'system') {
     const batch = await this.prisma.batch.findUnique({
       where: { id },
       include: {
         stepInstances: { select: { id: true } },
-        payments: { select: { id: true } },
       },
     });
     if (!batch) throw new NotFoundException('Batch not found');
 
+    const now = new Date();
     await this.prisma.$transaction(async (tx) => {
-      const paymentIds = batch.payments.map((p) => p.id);
-      if (paymentIds.length > 0) {
-        await tx.paymentAllocation.deleteMany({
-          where: { paymentId: { in: paymentIds } },
-        });
-      }
-      const stepIds = batch.stepInstances.map((s) => s.id);
-      await tx.auditLog.deleteMany({
-        where: {
-          OR: [
-            { entityType: 'batch', entityId: id },
-            { entityType: 'step_instance', entityId: { in: stepIds } },
-          ],
+      await tx.batch.update({
+        where: { id },
+        data: {
+          deletedAt: now,
+          status: BatchStatus.CANCELLED,
         },
       });
-      await tx.batch.delete({ where: { id } });
+      await tx.auditLog.create({
+        data: {
+          entityType: 'batch',
+          entityId: id,
+          action: 'BATCH_SOFT_DELETED',
+          actor: actorId,
+          detail: 'Batch marked as deleted (audit retention preserved)',
+        },
+      });
     });
 
-    return { message: 'Batch and its bills deleted successfully', id };
+    return { message: 'Batch archived successfully (soft-delete)', id, deletedAt: now };
   }
 }

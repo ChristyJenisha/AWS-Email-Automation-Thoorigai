@@ -180,6 +180,7 @@ export class RemindersService {
       where: {
         status: StepStatus.ALERTED,
         nextReminderAt: { lte: now },
+        batch: { deletedAt: null },
       },
       include: {
         stage: {

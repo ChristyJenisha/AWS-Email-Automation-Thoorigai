@@ -94,6 +94,6 @@ export class BatchesController {
     this.authService.assertAdminAccess(request?.user);
     const batch = await this.batchesService.get(id);
     this.authService.assertOrganizationAccess(request?.user, batch.organizationId);
-    return this.batchesService.delete(id);
+    return this.batchesService.delete(id, request.user.id);
   }
 }
