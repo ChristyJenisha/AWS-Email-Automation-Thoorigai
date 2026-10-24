@@ -56,3 +56,4 @@ describe('OrgScopedGuard', () => {
     expect(() => guard.canActivate(context)).toThrow('Cross-organization access is strictly forbidden');
   });
 });
+

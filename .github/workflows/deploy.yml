@@ -2,9 +2,9 @@ name: CI/CD Pipeline - Bill Collection Tracker
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [master, main]
   pull_request:
-    branches: [ master, main ]
+    branches: [master, main]
   workflow_dispatch:
 
 concurrency:
@@ -59,14 +59,30 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Check Deployment Credentials
+        id: check_creds
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          if [ -n "$EC2_HOST" ] && [ -n "$EC2_SSH_KEY" ]; then
+            echo "can_deploy=true" >> "$GITHUB_OUTPUT"
+            echo "user=${EC2_USER:-ubuntu}" >> "$GITHUB_OUTPUT"
+            echo "EC2 deployment credentials detected. Proceeding with SSH deployment."
+          else
+            echo "can_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Notice: EC2_HOST or EC2_SSH_KEY secrets are not configured in GitHub repository secrets. Skipping remote SSH deployment step."
+          fi
+
       - name: Execute Remote Deploy via SSH
+        if: steps.check_creds.outputs.can_deploy == 'true'
         uses: appleboy/ssh-action@v1.0.3
-        if: ${{ secrets.EC2_HOST != '' }}
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          username: ${{ steps.check_creds.outputs.user }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          port: ${{ secrets.EC2_PORT || 22 }}
+          port: 22
           script: |
             set -euo pipefail
             echo "Starting continuous deployment sequence..."

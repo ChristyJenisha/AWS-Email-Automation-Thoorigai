@@ -87,7 +87,7 @@ Every item flagged in the review report (`REMEDIATION-HANDOVER.md`) has been sys
 | **P1** | **P1-12** | Prisma client missing in clean builds | **FIXED** | Added `"postinstall": "prisma generate --schema prisma/schema.prisma"` to `api/package.json`. |
 | **P1** | **P1-13** | Hosting architecture alignment | **FIXED** | Cloudflare Pages frontend (`https://collectflow-app.pages.dev`) proxies `/api/*` to EC2 NestJS backend. Both return 200 OK. |
 | **P1** | **P1-14** | LAN IPs and dead tunnels in Next config | **FIXED** | Removed hardcoded IPs and dead tunnel URLs; uses `ALLOWED_DEV_ORIGINS`. |
-| **P1** | **P1-15** | Competing deploy pipelines & syntax | **FIXED** | Corrected check in `.github/workflows/deploy.yml` to `if: ${{ secrets.EC2_HOST != '' }}` and added Gitleaks scanner. |
+| **P1** | **P1-15** | Competing deploy pipelines & syntax | **FIXED** | Replaced invalid `secrets` in `if:` expression with step-level credential inspection (`$GITHUB_OUTPUT`) to prevent "No jobs were run" workflow failures, and added Gitleaks secret scanning. |
 | **P2** | **P2-1 & P2-2** | Outbox pattern for resilient email delivery | **FIXED** | Added `Outbox` table and `OutboxService` with exponential backoff and dead-letter queue (max 5 retries). |
 | **P2** | **P2-3** | Centralized organization scoping | **FIXED** | Implemented `OrgScopedGuard` and `@OrgScoped()` decorator to guard tenant boundaries automatically. |
 | **P2** | **P2-4** | Duplicate payment creation risk | **FIXED** | Added unique `idempotencyKey` on `Payment`. Frontend generates UUID per payment submission modal. |
