@@ -108,29 +108,30 @@ export class ContactsService {
       );
     }
 
-    // 2. Unlink any backup approver references
+    // 2. Check if this contact is currently assigned as a primary approver in any workflow template
+    const stagesWherePrimary = await this.prisma.workflowStage.findMany({
+      where: { contactId: id },
+      include: {
+        template: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    if (stagesWherePrimary.length > 0) {
+      const templateNames = Array.from(
+        new Set(stagesWherePrimary.map((s) => s.template?.name || 'Untitled Workflow')),
+      ).join(', ');
+      throw new ConflictException(
+        `Cannot delete "${contact.name}" because they are currently assigned as the primary approver in workflow template: "${templateNames}". Please reassign that stage to another approver in Workflow Templates first, or use "Deactivate" to suspend this contact.`,
+      );
+    }
+
+    // 3. Unlink any backup approver references safely
     await this.prisma.workflowStage.updateMany({
       where: { backupContactId: id },
       data: { backupContactId: null },
     });
-
-    // 3. For any workflow templates using this contact as primary approver with 0 active batches,
-    //    clean up the empty workflow so it doesn't block contact deletion
-    const stagesWherePrimary = await this.prisma.workflowStage.findMany({
-      where: { contactId: id },
-      select: { templateId: true },
-    });
-
-    const templateIds = Array.from(new Set(stagesWherePrimary.map((s) => s.templateId)));
-
-    if (templateIds.length > 0) {
-      await this.prisma.workflowStage.deleteMany({
-        where: { templateId: { in: templateIds } },
-      });
-      await this.prisma.workflowTemplate.deleteMany({
-        where: { id: { in: templateIds } },
-      });
-    }
 
     // 4. Permanently delete the contact
     await this.prisma.contact.delete({ where: { id } });

@@ -84,13 +84,11 @@ describe('ContactsService', () => {
     expect(prisma.contact.update).not.toHaveBeenCalled();
   });
 
-  it('deletes a contact and cascades empty workflows when there are no active batches', async () => {
+  it('deletes a contact when not assigned to any primary workflow stages and unlinks backup stages', async () => {
     prisma.contact.findFirst.mockResolvedValue({ id: 'contact-1', name: 'Jenisha' });
     prisma.batch.findMany.mockResolvedValue([]);
-    prisma.workflowStage.findMany.mockResolvedValue([{ templateId: 'template-1' }]);
+    prisma.workflowStage.findMany.mockResolvedValue([]);
     prisma.workflowStage.updateMany.mockResolvedValue({ count: 1 });
-    prisma.workflowStage.deleteMany.mockResolvedValue({ count: 1 });
-    prisma.workflowTemplate.deleteMany.mockResolvedValue({ count: 1 });
     prisma.contact.delete.mockResolvedValue({ id: 'contact-1' });
 
     const result = await service.delete('contact-1', 'org-1');
@@ -101,14 +99,17 @@ describe('ContactsService', () => {
       where: { backupContactId: 'contact-1' },
       data: { backupContactId: null },
     });
-    expect(prisma.workflowStage.deleteMany).toHaveBeenCalledWith({
-      where: { templateId: { in: ['template-1'] } },
-    });
-    expect(prisma.workflowTemplate.deleteMany).toHaveBeenCalledWith({
-      where: { id: { in: ['template-1'] } },
-    });
     expect(prisma.contact.delete).toHaveBeenCalledWith({ where: { id: 'contact-1' } });
     expect(result).toEqual({ message: 'Contact "Jenisha" deleted permanently', id: 'contact-1' });
+  });
+
+  it('rejects deletion when contact is assigned as primary approver in a workflow template', async () => {
+    prisma.contact.findFirst.mockResolvedValue({ id: 'contact-1', name: 'Jenisha' });
+    prisma.batch.findMany.mockResolvedValue([]);
+    prisma.workflowStage.findMany.mockResolvedValue([{ template: { name: 'Standard Workflow' } }]);
+
+    await expect(service.delete('contact-1', 'org-1')).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.contact.delete).not.toHaveBeenCalled();
   });
 
   it('rejects deletion when contact is assigned to an active in-flight batch', async () => {
