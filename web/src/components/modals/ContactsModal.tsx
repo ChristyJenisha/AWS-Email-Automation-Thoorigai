@@ -235,7 +235,7 @@ export function ContactsModal({
               <div className="contact-edit-footer">
                 <label>
                   Role
-                  <input
+                  <select
                     value={contact.role}
                     onChange={(event) =>
                       setContacts((current) =>
@@ -244,7 +244,11 @@ export function ContactsModal({
                         )
                       )
                     }
-                  />
+                  >
+                    <option value="APPROVER">👤 Approver</option>
+                    <option value="BACKUP_APPROVER">🛡️ Backup Approver</option>
+                    <option value="ADMIN">👑 Admin</option>
+                  </select>
                 </label>
                 <label className="contact-active">
                   <input
@@ -311,14 +315,16 @@ export function ContactsModal({
             </label>
             <label>
               Role
-              <input
-                required
-                maxLength={80}
+              <select
                 value={contactDraft.role}
                 onChange={(event) =>
                   setContactDraft({ ...contactDraft, role: event.target.value })
                 }
-              />
+              >
+                <option value="APPROVER">👤 Approver</option>
+                <option value="BACKUP_APPROVER">🛡️ Backup Approver</option>
+                <option value="ADMIN">👑 Admin</option>
+              </select>
             </label>
           </div>
           <div className="dialog-actions">

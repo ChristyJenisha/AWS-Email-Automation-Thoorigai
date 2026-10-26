@@ -229,7 +229,7 @@ export default function SettingsPage() {
   const [editContactOpen, setEditContactOpen] = useState(false);
   const [deleteContactTarget, setDeleteContactTarget] = useState<ContactRecord | null>(null);
 
-  const [contactDraft, setContactDraft] = useState({ name: "", email: "", role: "Approver" });
+  const [contactDraft, setContactDraft] = useState({ name: "", email: "", role: "APPROVER" });
   const [editingContact, setEditingContact] = useState<ContactRecord | null>(null);
   const [isSubmittingContact, setIsSubmittingContact] = useState(false);
 
@@ -245,7 +245,7 @@ export default function SettingsPage() {
   }, [contacts, contactSearch]);
 
   const openCreateContactModal = () => {
-    setContactDraft({ name: "", email: "", role: "Approver" });
+    setContactDraft({ name: "", email: "", role: "APPROVER" });
     setCreateContactOpen(true);
   };
 
@@ -773,14 +773,14 @@ export default function SettingsPage() {
                     <td>
                       <Badge
                         variant={
-                          contact.role.toLowerCase().includes("primary")
+                          contact.role.toUpperCase() === "ADMIN"
                             ? "urgent"
-                            : contact.role.toLowerCase().includes("backup")
+                            : contact.role.toUpperCase().includes("BACKUP")
                             ? "warning"
                             : "info"
                         }
                       >
-                        {contact.role}
+                        {contact.role === "ADMIN" ? "👑 Admin" : contact.role === "BACKUP_APPROVER" ? "🛡️ Backup Approver" : "👤 Approver"}
                       </Badge>
                     </td>
 
@@ -1479,10 +1479,8 @@ export default function SettingsPage() {
           </label>
 
           <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-            <span>Role / Designation</span>
-            <input
-              type="text"
-              placeholder="e.g. Primary Approver, Finance Manager, Backup Reviewer"
+            <span>Role / Access Level *</span>
+            <select
               value={contactDraft.role}
               onChange={(e) => setContactDraft((curr) => ({ ...curr, role: e.target.value }))}
               style={{
@@ -1490,8 +1488,13 @@ export default function SettingsPage() {
                 borderRadius: "var(--radius-md)",
                 border: "1px solid var(--border-light)",
                 fontSize: 13,
+                background: "var(--bg-surface)",
               }}
-            />
+            >
+              <option value="APPROVER">👤 Primary Approver (Stage 1 Reviewer)</option>
+              <option value="BACKUP_APPROVER">🛡️ Backup Approver (Stage 2 Reviewer)</option>
+              <option value="ADMIN">👑 Administrator (Dashboard Login & Full Access)</option>
+            </select>
           </label>
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
@@ -1556,9 +1559,8 @@ export default function SettingsPage() {
             </label>
 
             <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-              <span>Role / Designation</span>
-              <input
-                type="text"
+              <span>Role / Access Level *</span>
+              <select
                 value={editingContact.role}
                 onChange={(e) =>
                   setEditingContact((curr) => (curr ? { ...curr, role: e.target.value } : curr))
@@ -1568,8 +1570,13 @@ export default function SettingsPage() {
                   borderRadius: "var(--radius-md)",
                   border: "1px solid var(--border-light)",
                   fontSize: 13,
+                  background: "var(--bg-surface)",
                 }}
-              />
+              >
+                <option value="APPROVER">👤 Primary Approver (Stage 1 Reviewer)</option>
+                <option value="BACKUP_APPROVER">🛡️ Backup Approver (Stage 2 Reviewer)</option>
+                <option value="ADMIN">👑 Administrator (Dashboard Login & Full Access)</option>
+              </select>
             </label>
 
             <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", marginTop: 4 }}>
