@@ -1,6 +1,8 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+const defaultPasswordHash = bcrypt.hashSync('demo123', 10);
 
 if (process.env.NODE_ENV === 'production' && process.env.DEMO_MODE !== 'true') {
   console.log('Skipping demo seed in production (DEMO_MODE !== true)');
@@ -21,13 +23,14 @@ try {
         email: 'approver@example.test',
       },
     },
-    update: { name: 'Demo Approver', role: 'APPROVER', isActive: true },
+    update: { name: 'Demo Approver', role: 'APPROVER', isActive: true, passwordHash: defaultPasswordHash },
     create: {
       id: 'demo-approver',
       organizationId: organization.id,
       name: 'Demo Approver',
       email: 'approver@example.test',
       role: 'APPROVER',
+      passwordHash: defaultPasswordHash,
     },
   });
 
@@ -38,13 +41,14 @@ try {
         email: 'backup@example.test',
       },
     },
-    update: { name: 'Demo Backup Approver', role: 'BACKUP_APPROVER', isActive: true },
+    update: { name: 'Demo Backup Approver', role: 'BACKUP_APPROVER', isActive: true, passwordHash: defaultPasswordHash },
     create: {
       id: 'demo-backup-approver',
       organizationId: organization.id,
       name: 'Demo Backup Approver',
       email: 'backup@example.test',
       role: 'BACKUP_APPROVER',
+      passwordHash: defaultPasswordHash,
     },
   });
 

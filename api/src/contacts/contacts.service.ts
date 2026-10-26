@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { BatchStatus, Role } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateContactDto, UpdateContactDto } from './contact.dto.js';
 
@@ -33,12 +34,17 @@ export class ContactsService {
     });
     if (existing) throw new ConflictException('A contact with this email already exists in the organization');
 
+    const passwordHash = input.password?.trim()
+      ? await bcrypt.hash(input.password.trim(), 10)
+      : null;
+
     return this.prisma.contact.create({
       data: {
         organizationId: input.organizationId,
         name: input.name.trim(),
         email,
         role: parseRole(input.role),
+        ...(passwordHash ? { passwordHash } : {}),
       },
       select: contactFields,
     });
@@ -59,11 +65,17 @@ export class ContactsService {
       if (existing) throw new ConflictException('A contact with this email already exists in the organization');
     }
 
+    let passwordHash: string | undefined;
+    if (input.password && input.password.trim().length > 0) {
+      passwordHash = await bcrypt.hash(input.password.trim(), 10);
+    }
+
     const data = {
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.email !== undefined ? { email: input.email.trim().toLowerCase() } : {}),
       ...(input.role !== undefined ? { role: parseRole(input.role) } : {}),
       ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      ...(passwordHash !== undefined ? { passwordHash } : {}),
     };
     if (Object.keys(data).length === 0) throw new ConflictException('Provide at least one contact field to update');
 

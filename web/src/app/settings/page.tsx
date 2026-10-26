@@ -17,6 +17,9 @@ import {
   UserPlus,
   Clock,
   ShieldAlert,
+  Eye,
+  EyeOff,
+  KeyRound,
 } from "lucide-react";
 import { useDataContext } from "../../lib/DataContext";
 import { Button, Badge, ModalDialog } from "../../components/ui";
@@ -229,8 +232,11 @@ export default function SettingsPage() {
   const [editContactOpen, setEditContactOpen] = useState(false);
   const [deleteContactTarget, setDeleteContactTarget] = useState<ContactRecord | null>(null);
 
-  const [contactDraft, setContactDraft] = useState({ name: "", email: "", role: "APPROVER" });
+  const [contactDraft, setContactDraft] = useState({ name: "", email: "", role: "APPROVER", password: "" });
   const [editingContact, setEditingContact] = useState<ContactRecord | null>(null);
+  const [editContactPassword, setEditContactPassword] = useState("");
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
   const [isSubmittingContact, setIsSubmittingContact] = useState(false);
 
   const filteredContacts = useMemo(() => {
@@ -245,12 +251,15 @@ export default function SettingsPage() {
   }, [contacts, contactSearch]);
 
   const openCreateContactModal = () => {
-    setContactDraft({ name: "", email: "", role: "APPROVER" });
+    setContactDraft({ name: "", email: "", role: "APPROVER", password: "" });
+    setShowCreatePassword(false);
     setCreateContactOpen(true);
   };
 
   const openEditContactModal = (c: ContactRecord) => {
     setEditingContact(c);
+    setEditContactPassword("");
+    setShowEditPassword(false);
     setEditContactOpen(true);
   };
 
@@ -259,6 +268,10 @@ export default function SettingsPage() {
     if (!isAdmin || !authToken || !currentUser) return;
     if (!contactDraft.name.trim() || !contactDraft.email.trim()) {
       setNotice({ type: "error", message: "Name and Email are required." });
+      return;
+    }
+    if (contactDraft.password.trim() && contactDraft.password.trim().length < 6) {
+      setNotice({ type: "error", message: "Password must be at least 6 characters long." });
       return;
     }
 
@@ -274,7 +287,8 @@ export default function SettingsPage() {
           organizationId: currentUser.organizationId || "demo-org",
           name: contactDraft.name.trim(),
           email: contactDraft.email.trim(),
-          role: contactDraft.role.trim() || "Approver",
+          role: contactDraft.role.trim() || "APPROVER",
+          ...(contactDraft.password.trim() ? { password: contactDraft.password.trim() } : {}),
         }),
       });
 
@@ -297,6 +311,10 @@ export default function SettingsPage() {
   const handleEditContact = async (e: FormEvent) => {
     e.preventDefault();
     if (!isAdmin || !authToken || !currentUser || !editingContact) return;
+    if (editContactPassword.trim() && editContactPassword.trim().length < 6) {
+      setNotice({ type: "error", message: "New password must be at least 6 characters long." });
+      return;
+    }
 
     setIsSubmittingContact(true);
     setNotice(null);
@@ -315,6 +333,7 @@ export default function SettingsPage() {
             email: editingContact.email.trim(),
             role: editingContact.role.trim(),
             isActive: editingContact.isActive,
+            ...(editContactPassword.trim() ? { password: editContactPassword.trim() } : {}),
           }),
         }
       );
@@ -1497,6 +1516,56 @@ export default function SettingsPage() {
             </select>
           </label>
 
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <KeyRound size={13} style={{ color: "var(--brand-primary)" }} />
+                <span>Login Password</span>
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)" }}>
+                {contactDraft.role === "ADMIN" ? "Recommended for Admin (min 6 chars)" : "Optional"}
+              </span>
+            </div>
+            <div style={{ position: "relative" }}>
+              <input
+                type={showCreatePassword ? "text" : "password"}
+                placeholder="Assign a login password (min 6 characters)"
+                minLength={6}
+                value={contactDraft.password}
+                onChange={(e) => setContactDraft((curr) => ({ ...curr, password: e.target.value }))}
+                style={{
+                  width: "100%",
+                  padding: "8px 36px 8px 12px",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border-light)",
+                  fontSize: 13,
+                  background: "var(--bg-surface)",
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowCreatePassword((p) => !p)}
+                tabIndex={-1}
+                aria-label={showCreatePassword ? "Hide password" : "Show password"}
+                style={{
+                  position: "absolute",
+                  right: 8,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                  padding: 4,
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                {showCreatePassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </label>
+
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
             <Button
               type="button"
@@ -1577,6 +1646,56 @@ export default function SettingsPage() {
                 <option value="BACKUP_APPROVER">🛡️ Backup Approver (Stage 2 Reviewer)</option>
                 <option value="ADMIN">👑 Administrator (Dashboard Login & Full Access)</option>
               </select>
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <KeyRound size={13} style={{ color: "var(--brand-primary)" }} />
+                  <span>Reset Login Password</span>
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)" }}>
+                  Leave blank to keep existing password
+                </span>
+              </div>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showEditPassword ? "text" : "password"}
+                  placeholder="Enter new password to update (min 6 chars)"
+                  minLength={6}
+                  value={editContactPassword}
+                  onChange={(e) => setEditContactPassword(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "8px 36px 8px 12px",
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--border-light)",
+                    fontSize: 13,
+                    background: "var(--bg-surface)",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowEditPassword((p) => !p)}
+                  tabIndex={-1}
+                  aria-label={showEditPassword ? "Hide password" : "Show password"}
+                  style={{
+                    position: "absolute",
+                    right: 8,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    padding: 4,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  {showEditPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
             </label>
 
             <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", marginTop: 4 }}>
