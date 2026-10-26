@@ -27,7 +27,7 @@ import { ContactRecord, WorkflowRecord } from "../../types";
 import { initials } from "../../lib/utils";
 import { getApiBase } from "../../lib/api";
 
-type TabType = "workflows" | "contacts" | "policies";
+type TabType = "workflows" | "admins" | "contacts" | "policies";
 
 interface StageDraft {
   contactId: string;
@@ -225,9 +225,21 @@ export default function SettingsPage() {
   };
 
   // -------------------------------------------------------------------------
-  // CONTACTS STATE & HANDLERS
+  // CONTACTS & ADMINISTRATORS STATE & HANDLERS
   // -------------------------------------------------------------------------
-  const [contactSearch, setContactSearch] = useState("");
+  const adminContacts = useMemo(
+    () => contacts.filter((c) => c.role?.toUpperCase() === "ADMIN"),
+    [contacts]
+  );
+  const approverContacts = useMemo(
+    () => contacts.filter((c) => c.role?.toUpperCase() !== "ADMIN"),
+    [contacts]
+  );
+
+  const [adminSearch, setAdminSearch] = useState("");
+  const [approverSearch, setApproverSearch] = useState("");
+  const [isModalForAdmin, setIsModalForAdmin] = useState(false);
+
   const [createContactOpen, setCreateContactOpen] = useState(false);
   const [editContactOpen, setEditContactOpen] = useState(false);
   const [deleteContactTarget, setDeleteContactTarget] = useState<ContactRecord | null>(null);
@@ -239,20 +251,36 @@ export default function SettingsPage() {
   const [showEditPassword, setShowEditPassword] = useState(false);
   const [isSubmittingContact, setIsSubmittingContact] = useState(false);
 
-  const filteredContacts = useMemo(() => {
-    const q = contactSearch.trim().toLowerCase();
-    if (!q) return contacts;
-    return contacts.filter(
+  const filteredAdmins = useMemo(() => {
+    const q = adminSearch.trim().toLowerCase();
+    if (!q) return adminContacts;
+    return adminContacts.filter(
+      (c) => c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)
+    );
+  }, [adminContacts, adminSearch]);
+
+  const filteredApprovers = useMemo(() => {
+    const q = approverSearch.trim().toLowerCase();
+    if (!q) return approverContacts;
+    return approverContacts.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
         c.email.toLowerCase().includes(q) ||
         c.role.toLowerCase().includes(q)
     );
-  }, [contacts, contactSearch]);
+  }, [approverContacts, approverSearch]);
 
-  const openCreateContactModal = () => {
+  const openCreateAdminModal = () => {
+    setContactDraft({ name: "", email: "", role: "ADMIN", password: "" });
+    setShowCreatePassword(false);
+    setIsModalForAdmin(true);
+    setCreateContactOpen(true);
+  };
+
+  const openCreateApproverModal = () => {
     setContactDraft({ name: "", email: "", role: "APPROVER", password: "" });
     setShowCreatePassword(false);
+    setIsModalForAdmin(false);
     setCreateContactOpen(true);
   };
 
@@ -260,6 +288,7 @@ export default function SettingsPage() {
     setEditingContact(c);
     setEditContactPassword("");
     setShowEditPassword(false);
+    setIsModalForAdmin(c.role?.toUpperCase() === "ADMIN");
     setEditContactOpen(true);
   };
 
@@ -270,7 +299,11 @@ export default function SettingsPage() {
       setNotice({ type: "error", message: "Name and Email are required." });
       return;
     }
-    if (contactDraft.password.trim() && contactDraft.password.trim().length < 6) {
+    if (isModalForAdmin && (!contactDraft.password.trim() || contactDraft.password.trim().length < 6)) {
+      setNotice({ type: "error", message: "Password must be at least 6 characters long for an Administrator." });
+      return;
+    }
+    if (!isModalForAdmin && contactDraft.password.trim() && contactDraft.password.trim().length < 6) {
       setNotice({ type: "error", message: "Password must be at least 6 characters long." });
       return;
     }
@@ -520,13 +553,25 @@ export default function SettingsPage() {
         <button
           type="button"
           role="tab"
+          aria-selected={activeTab === "admins"}
+          className={`settings-tab-btn ${activeTab === "admins" ? "active" : ""}`}
+          onClick={() => setActiveTab("admins")}
+        >
+          <ShieldAlert size={15} />
+          <span>Team & Admins</span>
+          <Badge variant={adminContacts.length > 0 ? "urgent" : "neutral"}>{adminContacts.length}</Badge>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
           aria-selected={activeTab === "contacts"}
           className={`settings-tab-btn ${activeTab === "contacts" ? "active" : ""}`}
           onClick={() => setActiveTab("contacts")}
         >
           <Users size={15} />
-          <span>Contacts</span>
-          <Badge variant="neutral">{contacts.length}</Badge>
+          <span>Approvers Directory</span>
+          <Badge variant="neutral">{approverContacts.length}</Badge>
         </button>
 
         <button
@@ -695,10 +740,10 @@ export default function SettingsPage() {
       )}
 
       {/* =====================================================================
-          TAB 2: CONTACTS
+          TAB 2: TEAM & ADMINISTRATORS (DASHBOARD LOGIN ACCESS)
          ===================================================================== */}
-      {activeTab === "contacts" && (
-        <section aria-labelledby="tab-contacts-title">
+      {activeTab === "admins" && (
+        <section aria-labelledby="tab-admins-title">
           <div
             style={{
               display: "flex",
@@ -710,11 +755,11 @@ export default function SettingsPage() {
             }}
           >
             <div>
-              <h3 id="tab-contacts-title" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
-                Approver Directory ({contacts.length})
+              <h3 id="tab-admins-title" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
+                Team & System Administrators ({adminContacts.length})
               </h3>
               <p style={{ margin: "2px 0 0", color: "var(--text-secondary)", fontSize: 13 }}>
-                Authorized officers who receive 1-click email authorization links and 6-digit OTP codes.
+                Internal operators and team leads authorized to log into the dashboard with their email & password.
               </p>
             </div>
 
@@ -732,9 +777,9 @@ export default function SettingsPage() {
                 />
                 <input
                   type="text"
-                  placeholder="Search contacts..."
-                  value={contactSearch}
-                  onChange={(e) => setContactSearch(e.target.value)}
+                  placeholder="Search administrators..."
+                  value={adminSearch}
+                  onChange={(e) => setAdminSearch(e.target.value)}
                   style={{
                     padding: "6px 12px 6px 30px",
                     borderRadius: "var(--radius-md)",
@@ -752,9 +797,9 @@ export default function SettingsPage() {
                   variant="primary"
                   size="sm"
                   leftIcon={<UserPlus size={15} />}
-                  onClick={openCreateContactModal}
+                  onClick={openCreateAdminModal}
                 >
-                  Add Contact
+                  Add Administrator
                 </Button>
               )}
             </div>
@@ -764,48 +809,60 @@ export default function SettingsPage() {
             <table className="settings-table">
               <thead>
                 <tr>
-                  <th>Contact Officer</th>
-                  <th>Email Address</th>
-                  <th>Assigned Role</th>
+                  <th>Administrator</th>
+                  <th>Login Email</th>
+                  <th>Access Role</th>
+                  <th>Authentication</th>
                   <th>Status</th>
                   {isAdmin && <th style={{ textAlign: "right" }}>Actions</th>}
                 </tr>
               </thead>
               <tbody>
-                {filteredContacts.map((contact) => (
-                  <tr key={contact.id}>
+                {filteredAdmins.map((admin) => (
+                  <tr key={admin.id}>
                     <td>
                       <div className="settings-user-cell">
-                        <span className="settings-user-avatar">{initials(contact.name)}</span>
+                        <span
+                          className="settings-user-avatar"
+                          style={{ background: "var(--brand-primary)", color: "var(--text-inverse)" }}
+                        >
+                          {initials(admin.name)}
+                        </span>
                         <div>
                           <strong style={{ fontSize: 13.5, color: "var(--text-primary)" }}>
-                            {contact.name}
+                            {admin.name}
                           </strong>
                         </div>
                       </div>
                     </td>
 
                     <td style={{ color: "var(--text-secondary)" }}>
-                      <code style={{ fontSize: 12.5 }}>{contact.email}</code>
+                      <code style={{ fontSize: 12.5 }}>{admin.email}</code>
                     </td>
 
                     <td>
-                      <Badge
-                        variant={
-                          contact.role.toUpperCase() === "ADMIN"
-                            ? "urgent"
-                            : contact.role.toUpperCase().includes("BACKUP")
-                            ? "warning"
-                            : "info"
-                        }
+                      <Badge variant="urgent">👑 Administrator</Badge>
+                    </td>
+
+                    <td>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: "var(--status-success)",
+                          fontWeight: 600,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
                       >
-                        {contact.role === "ADMIN" ? "👑 Admin" : contact.role === "BACKUP_APPROVER" ? "🛡️ Backup Approver" : "👤 Approver"}
-                      </Badge>
+                        <KeyRound size={13} />
+                        <span>Email & Password</span>
+                      </span>
                     </td>
 
                     <td>
-                      <Badge variant={contact.isActive ? "success" : "neutral"}>
-                        {contact.isActive ? "Active" : "Inactive"}
+                      <Badge variant={admin.isActive ? "success" : "neutral"}>
+                        {admin.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </td>
 
@@ -816,26 +873,26 @@ export default function SettingsPage() {
                             variant="outline"
                             size="sm"
                             leftIcon={<Edit2 size={12} />}
-                            onClick={() => openEditContactModal(contact)}
+                            onClick={() => openEditContactModal(admin)}
                           >
-                            Edit
+                            Edit / Password
                           </Button>
 
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => void handleToggleContactActive(contact)}
-                            title={contact.isActive ? "Deactivate this contact" : "Re-activate this contact"}
+                            onClick={() => void handleToggleContactActive(admin)}
+                            title={admin.isActive ? "Deactivate this admin" : "Re-activate this admin"}
                           >
-                            {contact.isActive ? "Deactivate" : "Activate"}
+                            {admin.isActive ? "Deactivate" : "Activate"}
                           </Button>
 
                           <Button
                             variant="destructive"
                             size="sm"
                             leftIcon={<Trash2 size={12} />}
-                            onClick={() => setDeleteContactTarget(contact)}
-                            title="Permanently remove contact"
+                            onClick={() => setDeleteContactTarget(admin)}
+                            title="Permanently remove administrator"
                           >
                             Delete
                           </Button>
@@ -845,11 +902,190 @@ export default function SettingsPage() {
                   </tr>
                 ))}
 
-                {filteredContacts.length === 0 && (
+                {filteredAdmins.length === 0 && (
                   <tr>
-                    <td colSpan={isAdmin ? 5 : 4} style={{ textAlign: "center", padding: "36px 18px" }}>
+                    <td colSpan={isAdmin ? 6 : 5} style={{ textAlign: "center", padding: "36px 18px" }}>
                       <p style={{ margin: 0, color: "var(--text-muted)", fontSize: 13 }}>
-                        No contacts found matching your search.
+                        No administrators found matching your search.
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* =====================================================================
+          TAB 3: APPROVERS DIRECTORY (PASSWORDLESS EMAIL SIGNATORIES)
+         ===================================================================== */}
+      {activeTab === "contacts" && (
+        <section aria-labelledby="tab-contacts-title">
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 16,
+              flexWrap: "wrap",
+              gap: 12,
+            }}
+          >
+            <div>
+              <h3 id="tab-contacts-title" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
+                Approvers Directory ({approverContacts.length})
+              </h3>
+              <p style={{ margin: "2px 0 0", color: "var(--text-secondary)", fontSize: 13 }}>
+                Designated reviewers and client signatories who receive 1-click email authorization links & OTP codes.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ position: "relative" }}>
+                <Search
+                  size={14}
+                  style={{
+                    position: "absolute",
+                    left: 10,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: "var(--text-muted)",
+                  }}
+                />
+                <input
+                  type="text"
+                  placeholder="Search approvers..."
+                  value={approverSearch}
+                  onChange={(e) => setApproverSearch(e.target.value)}
+                  style={{
+                    padding: "6px 12px 6px 30px",
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--border-light)",
+                    fontSize: 13,
+                    background: "var(--bg-surface)",
+                    color: "var(--text-primary)",
+                    minWidth: 200,
+                  }}
+                />
+              </div>
+
+              {isAdmin && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon={<UserPlus size={15} />}
+                  onClick={openCreateApproverModal}
+                >
+                  Add Approver
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="settings-table-wrapper">
+            <table className="settings-table">
+              <thead>
+                <tr>
+                  <th>Approver Officer</th>
+                  <th>Email Address</th>
+                  <th>Approval Role</th>
+                  <th>Authentication</th>
+                  <th>Status</th>
+                  {isAdmin && <th style={{ textAlign: "right" }}>Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredApprovers.map((approver) => (
+                  <tr key={approver.id}>
+                    <td>
+                      <div className="settings-user-cell">
+                        <span className="settings-user-avatar">{initials(approver.name)}</span>
+                        <div>
+                          <strong style={{ fontSize: 13.5, color: "var(--text-primary)" }}>
+                            {approver.name}
+                          </strong>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td style={{ color: "var(--text-secondary)" }}>
+                      <code style={{ fontSize: 12.5 }}>{approver.email}</code>
+                    </td>
+
+                    <td>
+                      <Badge
+                        variant={
+                          approver.role.toUpperCase().includes("BACKUP")
+                            ? "warning"
+                            : "info"
+                        }
+                      >
+                        {approver.role === "BACKUP_APPROVER" ? "🛡️ Backup Approver" : "👤 Primary Approver"}
+                      </Badge>
+                    </td>
+
+                    <td>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: "var(--text-muted)",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <span>✉️ Signed Magic Link + OTP</span>
+                      </span>
+                    </td>
+
+                    <td>
+                      <Badge variant={approver.isActive ? "success" : "neutral"}>
+                        {approver.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </td>
+
+                    {isAdmin && (
+                      <td style={{ textAlign: "right" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            leftIcon={<Edit2 size={12} />}
+                            onClick={() => openEditContactModal(approver)}
+                          >
+                            Edit
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void handleToggleContactActive(approver)}
+                            title={approver.isActive ? "Deactivate this approver" : "Re-activate this approver"}
+                          >
+                            {approver.isActive ? "Deactivate" : "Activate"}
+                          </Button>
+
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            leftIcon={<Trash2 size={12} />}
+                            onClick={() => setDeleteContactTarget(approver)}
+                            title="Permanently remove approver"
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+
+                {filteredApprovers.length === 0 && (
+                  <tr>
+                    <td colSpan={isAdmin ? 6 : 5} style={{ textAlign: "center", padding: "36px 18px" }}>
+                      <p style={{ margin: 0, color: "var(--text-muted)", fontSize: 13 }}>
+                        No approvers found matching your search.
                       </p>
                     </td>
                   </tr>
@@ -1454,12 +1690,16 @@ export default function SettingsPage() {
           MODALS: CONTACTS (CREATE / EDIT / DELETE)
          ===================================================================== */}
 
-      {/* CREATE CONTACT MODAL */}
+      {/* CREATE CONTACT / ADMIN MODAL */}
       <ModalDialog
         isOpen={createContactOpen}
         onClose={() => !isSubmittingContact && setCreateContactOpen(false)}
-        title="Add Approver Contact"
-        description="Add a contact officer who can be designated as a stage reviewer."
+        title={isModalForAdmin ? "Add Team Administrator" : "Add Approver Contact"}
+        description={
+          isModalForAdmin
+            ? "Register an internal team member or Team Lead with full dashboard login credentials."
+            : "Register a designated reviewer who will receive email authorization links. No password required."
+        }
         maxWidth="480px"
       >
         <form onSubmit={handleCreateContact} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1468,7 +1708,7 @@ export default function SettingsPage() {
             <input
               type="text"
               required
-              placeholder="e.g. Jeslin, Christy Jenisha"
+              placeholder={isModalForAdmin ? "e.g. TL Ramesh Kumar" : "e.g. Jeslin, Christy Jenisha"}
               value={contactDraft.name}
               onChange={(e) => setContactDraft((curr) => ({ ...curr, name: e.target.value }))}
               style={{
@@ -1485,7 +1725,7 @@ export default function SettingsPage() {
             <input
               type="email"
               required
-              placeholder="name@company.com"
+              placeholder={isModalForAdmin ? "admin@company.com" : "approver@company.com"}
               value={contactDraft.email}
               onChange={(e) => setContactDraft((curr) => ({ ...curr, email: e.target.value }))}
               style={{
@@ -1497,74 +1737,112 @@ export default function SettingsPage() {
             />
           </label>
 
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-            <span>Role / Access Level *</span>
-            <select
-              value={contactDraft.role}
-              onChange={(e) => setContactDraft((curr) => ({ ...curr, role: e.target.value }))}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--border-light)",
-                fontSize: 13,
-                background: "var(--bg-surface)",
-              }}
-            >
-              <option value="APPROVER">👤 Primary Approver (Stage 1 Reviewer)</option>
-              <option value="BACKUP_APPROVER">🛡️ Backup Approver (Stage 2 Reviewer)</option>
-              <option value="ADMIN">👑 Administrator (Dashboard Login & Full Access)</option>
-            </select>
-          </label>
-
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <KeyRound size={13} style={{ color: "var(--brand-primary)" }} />
-                <span>Login Password</span>
-              </span>
-              <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)" }}>
-                {contactDraft.role === "ADMIN" ? "Recommended for Admin (min 6 chars)" : "Optional"}
-              </span>
-            </div>
-            <div style={{ position: "relative" }}>
-              <input
-                type={showCreatePassword ? "text" : "password"}
-                placeholder="Assign a login password (min 6 characters)"
-                minLength={6}
-                value={contactDraft.password}
-                onChange={(e) => setContactDraft((curr) => ({ ...curr, password: e.target.value }))}
+          {isModalForAdmin ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+              <span>Access Role</span>
+              <div
                 style={{
-                  width: "100%",
-                  padding: "8px 36px 8px 12px",
+                  padding: "8px 12px",
+                  borderRadius: "var(--radius-md)",
+                  background: "var(--bg-subtle)",
+                  border: "1px solid var(--border-light)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--brand-primary)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <span>👑 Administrator (Full Platform Access)</span>
+              </div>
+            </div>
+          ) : (
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+              <span>Approval Level *</span>
+              <select
+                value={contactDraft.role}
+                onChange={(e) => setContactDraft((curr) => ({ ...curr, role: e.target.value }))}
+                style={{
+                  padding: "8px 12px",
                   borderRadius: "var(--radius-md)",
                   border: "1px solid var(--border-light)",
                   fontSize: 13,
                   background: "var(--bg-surface)",
                 }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowCreatePassword((p) => !p)}
-                tabIndex={-1}
-                aria-label={showCreatePassword ? "Hide password" : "Show password"}
-                style={{
-                  position: "absolute",
-                  right: 8,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "transparent",
-                  border: "none",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  padding: 4,
-                  display: "flex",
-                  alignItems: "center",
-                }}
               >
-                {showCreatePassword ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
+                <option value="APPROVER">👤 Primary Approver (Stage 1 Reviewer)</option>
+                <option value="BACKUP_APPROVER">🛡️ Backup Approver (Stage 2 Reviewer)</option>
+              </select>
+            </label>
+          )}
+
+          {isModalForAdmin ? (
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <KeyRound size={13} style={{ color: "var(--brand-primary)" }} />
+                  <span>Login Password *</span>
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)" }}>
+                  Min 6 characters
+                </span>
+              </div>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showCreatePassword ? "text" : "password"}
+                  required
+                  placeholder="Assign a secure login password"
+                  minLength={6}
+                  value={contactDraft.password}
+                  onChange={(e) => setContactDraft((curr) => ({ ...curr, password: e.target.value }))}
+                  style={{
+                    width: "100%",
+                    padding: "8px 36px 8px 12px",
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--border-light)",
+                    fontSize: 13,
+                    background: "var(--bg-surface)",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCreatePassword((p) => !p)}
+                  tabIndex={-1}
+                  aria-label={showCreatePassword ? "Hide password" : "Show password"}
+                  style={{
+                    position: "absolute",
+                    right: 8,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    padding: 4,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  {showCreatePassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </label>
+          ) : (
+            <div
+              style={{
+                padding: "10px 12px",
+                background: "var(--bg-subtle)",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--border-light)",
+                fontSize: 12,
+                color: "var(--text-secondary)",
+                lineHeight: 1.4,
+              }}
+            >
+              💡 <strong>Passwordless Security:</strong> Approvers do not need passwords. When batches require approval, they receive a secure cryptographic 1-click link via email with OTP verification.
             </div>
-          </label>
+          )}
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
             <Button
@@ -1576,17 +1854,22 @@ export default function SettingsPage() {
               Cancel
             </Button>
             <Button type="submit" variant="primary" isLoading={isSubmittingContact}>
-              Add Contact
+              {isModalForAdmin ? "Create Administrator" : "Add Approver"}
             </Button>
           </div>
         </form>
       </ModalDialog>
 
-      {/* EDIT CONTACT MODAL */}
+      {/* EDIT CONTACT / ADMIN MODAL */}
       <ModalDialog
         isOpen={editContactOpen}
         onClose={() => !isSubmittingContact && setEditContactOpen(false)}
-        title="Edit Approver Contact"
+        title={isModalForAdmin ? "Edit Administrator" : "Edit Approver Contact"}
+        description={
+          isModalForAdmin
+            ? "Update administrator details or reset their login password."
+            : "Update approver name, email, or sequential approval role."
+        }
         maxWidth="480px"
       >
         {editingContact && (
@@ -1627,76 +1910,79 @@ export default function SettingsPage() {
               />
             </label>
 
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-              <span>Role / Access Level *</span>
-              <select
-                value={editingContact.role}
-                onChange={(e) =>
-                  setEditingContact((curr) => (curr ? { ...curr, role: e.target.value } : curr))
-                }
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border-light)",
-                  fontSize: 13,
-                  background: "var(--bg-surface)",
-                }}
-              >
-                <option value="APPROVER">👤 Primary Approver (Stage 1 Reviewer)</option>
-                <option value="BACKUP_APPROVER">🛡️ Backup Approver (Stage 2 Reviewer)</option>
-                <option value="ADMIN">👑 Administrator (Dashboard Login & Full Access)</option>
-              </select>
-            </label>
-
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <KeyRound size={13} style={{ color: "var(--brand-primary)" }} />
-                  <span>Reset Login Password</span>
-                </span>
-                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)" }}>
-                  Leave blank to keep existing password
-                </span>
-              </div>
-              <div style={{ position: "relative" }}>
-                <input
-                  type={showEditPassword ? "text" : "password"}
-                  placeholder="Enter new password to update (min 6 chars)"
-                  minLength={6}
-                  value={editContactPassword}
-                  onChange={(e) => setEditContactPassword(e.target.value)}
+            {!isModalForAdmin && (
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                <span>Approval Role *</span>
+                <select
+                  value={editingContact.role}
+                  onChange={(e) =>
+                    setEditingContact((curr) => (curr ? { ...curr, role: e.target.value } : curr))
+                  }
                   style={{
-                    width: "100%",
-                    padding: "8px 36px 8px 12px",
+                    padding: "8px 12px",
                     borderRadius: "var(--radius-md)",
                     border: "1px solid var(--border-light)",
                     fontSize: 13,
                     background: "var(--bg-surface)",
                   }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowEditPassword((p) => !p)}
-                  tabIndex={-1}
-                  aria-label={showEditPassword ? "Hide password" : "Show password"}
-                  style={{
-                    position: "absolute",
-                    right: 8,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background: "transparent",
-                    border: "none",
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                    padding: 4,
-                    display: "flex",
-                    alignItems: "center",
-                  }}
                 >
-                  {showEditPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                </button>
-              </div>
-            </label>
+                  <option value="APPROVER">👤 Primary Approver (Stage 1 Reviewer)</option>
+                  <option value="BACKUP_APPROVER">🛡️ Backup Approver (Stage 2 Reviewer)</option>
+                </select>
+              </label>
+            )}
+
+            {isModalForAdmin && (
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <KeyRound size={13} style={{ color: "var(--brand-primary)" }} />
+                    <span>Reset Login Password</span>
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)" }}>
+                    Leave blank to keep existing password
+                  </span>
+                </div>
+                <div style={{ position: "relative" }}>
+                  <input
+                    type={showEditPassword ? "text" : "password"}
+                    placeholder="Enter new password to update (min 6 chars)"
+                    minLength={6}
+                    value={editContactPassword}
+                    onChange={(e) => setEditContactPassword(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "8px 36px 8px 12px",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--border-light)",
+                      fontSize: 13,
+                      background: "var(--bg-surface)",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowEditPassword((p) => !p)}
+                    tabIndex={-1}
+                    aria-label={showEditPassword ? "Hide password" : "Show password"}
+                    style={{
+                      position: "absolute",
+                      right: 8,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "transparent",
+                      border: "none",
+                      color: "var(--text-muted)",
+                      cursor: "pointer",
+                      padding: 4,
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    {showEditPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </label>
+            )}
 
             <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", marginTop: 4 }}>
               <input
@@ -1707,7 +1993,7 @@ export default function SettingsPage() {
                 }
                 style={{ width: 16, height: 16 }}
               />
-              <span>Contact is active and available for new workflow stages</span>
+              <span>Account is active</span>
             </label>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
@@ -1731,16 +2017,16 @@ export default function SettingsPage() {
       <ModalDialog
         isOpen={Boolean(deleteContactTarget)}
         onClose={() => !isSubmittingContact && setDeleteContactTarget(null)}
-        title="Delete Approver Contact"
+        title={deleteContactTarget?.role === "ADMIN" ? "Delete Administrator" : "Delete Approver Contact"}
         maxWidth="460px"
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <p style={{ margin: 0, fontSize: 13.5, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-            Are you sure you want to permanently delete{" "}
+            Are you sure you want to permanently delete the {deleteContactTarget?.role === "ADMIN" ? "administrator" : "approver contact"}{" "}
             <strong style={{ color: "var(--text-primary)" }}>
               {deleteContactTarget?.name} ({deleteContactTarget?.email})
             </strong>
-            ? This contact will no longer be available for workflows.
+            ? This action cannot be undone.
           </p>
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
@@ -1758,7 +2044,7 @@ export default function SettingsPage() {
               isLoading={isSubmittingContact}
               onClick={() => void handleDeleteContact()}
             >
-              Delete Contact
+              {deleteContactTarget?.role === "ADMIN" ? "Delete Administrator" : "Delete Approver"}
             </Button>
           </div>
         </div>
