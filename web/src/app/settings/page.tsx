@@ -299,6 +299,23 @@ export default function SettingsPage() {
       setNotice({ type: "error", message: "Name and Email are required." });
       return;
     }
+    const existingContact = contacts.find(
+      (c) => c.email?.trim().toLowerCase() === contactDraft.email.trim().toLowerCase()
+    );
+    if (existingContact) {
+      if (existingContact.role?.toUpperCase() === "ADMIN") {
+        setNotice({
+          type: "error",
+          message: `"${existingContact.name}" is already registered as an Administrator in "Team & Admins". Administrators can already be assigned as stage approvers in Workflow Templates without adding them twice.`,
+        });
+      } else {
+        setNotice({
+          type: "error",
+          message: `A contact with email "${contactDraft.email}" already exists in the organization.`,
+        });
+      }
+      return;
+    }
     if (isModalForAdmin && (!contactDraft.password.trim() || contactDraft.password.trim().length < 6)) {
       setNotice({ type: "error", message: "Password must be at least 6 characters long for an Administrator." });
       return;
@@ -935,6 +952,9 @@ export default function SettingsPage() {
               </h3>
               <p style={{ margin: "2px 0 0", color: "var(--text-secondary)", fontSize: 13 }}>
                 Designated reviewers and client signatories who receive 1-click email authorization links & OTP codes.
+                <span style={{ display: "inline-block", marginLeft: 6, color: "var(--brand-primary)", fontWeight: 500 }}>
+                  (Administrators in Team & Admins are automatically available as approvers.)
+                </span>
               </p>
             </div>
 
