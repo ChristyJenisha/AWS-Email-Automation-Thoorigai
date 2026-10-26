@@ -21,13 +21,13 @@ try {
         email: 'approver@example.test',
       },
     },
-    update: { name: 'Demo Approver', role: 'Approver', isActive: true },
+    update: { name: 'Demo Approver', role: 'APPROVER', isActive: true },
     create: {
       id: 'demo-approver',
       organizationId: organization.id,
       name: 'Demo Approver',
       email: 'approver@example.test',
-      role: 'Approver',
+      role: 'APPROVER',
     },
   });
 
@@ -38,13 +38,13 @@ try {
         email: 'backup@example.test',
       },
     },
-    update: { name: 'Demo Backup Approver', role: 'Backup approver', isActive: true },
+    update: { name: 'Demo Backup Approver', role: 'BACKUP_APPROVER', isActive: true },
     create: {
       id: 'demo-backup-approver',
       organizationId: organization.id,
       name: 'Demo Backup Approver',
       email: 'backup@example.test',
-      role: 'Backup approver',
+      role: 'BACKUP_APPROVER',
     },
   });
 

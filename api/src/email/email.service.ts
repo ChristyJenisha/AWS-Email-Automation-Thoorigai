@@ -135,7 +135,8 @@ export class EmailService {
     // Check for SMTP configuration (e.g. Gmail SMTP or custom SMTP)
     const smtpHost = process.env.SMTP_HOST?.trim() || (process.env.GMAIL_USER ? 'smtp.gmail.com' : undefined);
     const smtpUser = process.env.SMTP_USER?.trim() || process.env.GMAIL_USER?.trim();
-    const smtpPass = process.env.SMTP_PASS?.trim() || process.env.GMAIL_APP_PASSWORD?.trim();
+    const rawPass = process.env.SMTP_PASS?.trim() || process.env.GMAIL_APP_PASSWORD?.trim();
+    const smtpPass = rawPass ? rawPass.replace(/^["']|["']$/g, '').replace(/\s+/g, '') : undefined;
     const rawFrom = process.env.SMTP_FROM?.trim() || process.env.EMAIL_FROM?.trim() || smtpUser;
     this.smtpFrom = rawFrom ? (rawFrom.includes('<') ? rawFrom : `"Thoorigai Ledger" <${rawFrom}>`) : undefined;
 
