@@ -808,8 +808,8 @@ export default function SettingsPage() {
                   <th>Administrator</th>
                   <th>Login Email</th>
                   <th>Access Role</th>
-                  <th>Authentication</th>
-                  <th>Status</th>
+                  <th title="Authentication method used to log into the dashboard">Authentication</th>
+                  <th title="Whether this administrator account is active">Status</th>
                   {isAdmin && <th style={{ textAlign: "right" }}>Actions</th>}
                 </tr>
               </thead>
@@ -840,7 +840,7 @@ export default function SettingsPage() {
                       <Badge variant="urgent">👑 Administrator</Badge>
                     </td>
 
-                    <td>
+                    <td title="Credentials: This administrator logs into the dashboard using their registered email and secure bcrypt password.">
                       <span
                         style={{
                           fontSize: 12,
@@ -849,6 +849,7 @@ export default function SettingsPage() {
                           display: "inline-flex",
                           alignItems: "center",
                           gap: 4,
+                          cursor: "help",
                         }}
                       >
                         <KeyRound size={13} />
@@ -856,8 +857,8 @@ export default function SettingsPage() {
                       </span>
                     </td>
 
-                    <td>
-                      <Badge variant={admin.isActive ? "success" : "neutral"}>
+                    <td title={admin.isActive ? "Active: Allowed to log in and manage the platform." : "Inactive: Account is temporarily suspended."}>
+                      <Badge variant={admin.isActive ? "success" : "neutral"} style={{ cursor: "help" }}>
                         {admin.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </td>
@@ -986,8 +987,8 @@ export default function SettingsPage() {
                   <th>Approver Officer</th>
                   <th>Email Address</th>
                   <th>Approval Role</th>
-                  <th>Authentication</th>
-                  <th>Status</th>
+                  <th title="Authentication method used to verify identity when approving bills">Authentication</th>
+                  <th title="Whether this contact is currently active and receiving approval requests">Status</th>
                   {isAdmin && <th style={{ textAlign: "right" }}>Actions</th>}
                 </tr>
               </thead>
@@ -1021,7 +1022,7 @@ export default function SettingsPage() {
                       </Badge>
                     </td>
 
-                    <td>
+                    <td title="Passwordless: Approvers authorize bills through secure 1-click email links with OTP verification. No password needed.">
                       <span
                         style={{
                           fontSize: 12,
@@ -1029,14 +1030,15 @@ export default function SettingsPage() {
                           display: "inline-flex",
                           alignItems: "center",
                           gap: 4,
+                          cursor: "help",
                         }}
                       >
                         <span>✉️ Signed Magic Link + OTP</span>
                       </span>
                     </td>
 
-                    <td>
-                      <Badge variant={approver.isActive ? "success" : "neutral"}>
+                    <td title={approver.isActive ? "Active: Eligible to receive new approval requests." : "Inactive: Temporarily paused. New bills route to their backup."}>
+                      <Badge variant={approver.isActive ? "success" : "neutral"} style={{ cursor: "help" }}>
                         {approver.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </td>
