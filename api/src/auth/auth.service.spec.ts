@@ -103,4 +103,63 @@ describe('AuthService', () => {
       process.env = originalEnv;
     }
   });
+  it('allows database contact with passwordHash to sign in, and denies contacts without passwordHash', async () => {
+    const bcrypt = await import('bcryptjs');
+    const mockHash = bcrypt.default.hashSync('MySecureAdminPass123!', 10);
+
+    const mockPrisma = {
+      contact: {
+        findFirst: async ({ where }: { where: { email: { equals: string } } }) => {
+          if (where.email.equals.toLowerCase() === 'teamlead@example.com') {
+            return {
+              id: 'tl-123',
+              name: 'Team Lead Sarah',
+              email: 'teamlead@example.com',
+              role: 'ADMIN',
+              organizationId: 'org-tl',
+              isActive: true,
+              passwordHash: mockHash,
+            };
+          }
+          if (where.email.equals.toLowerCase() === 'approver-nopass@example.com') {
+            return {
+              id: 'app-456',
+              name: 'Approver No Password',
+              email: 'approver-nopass@example.com',
+              role: 'APPROVER',
+              organizationId: 'org-app',
+              isActive: true,
+              passwordHash: null,
+            };
+          }
+          return null;
+        },
+      },
+    } as any;
+
+    const service = new AuthService(mockPrisma);
+
+    // 1. Success with correct password
+    const result = await service.login({
+      email: 'teamlead@example.com',
+      password: 'MySecureAdminPass123!',
+    });
+    expect(result.user).toMatchObject({
+      id: 'tl-123',
+      name: 'Team Lead Sarah',
+      email: 'teamlead@example.com',
+      role: 'ADMIN',
+      organizationId: 'org-tl',
+    });
+
+    // 2. Failure with wrong password
+    await expect(
+      service.login({ email: 'teamlead@example.com', password: 'WrongPassword!' }),
+    ).rejects.toThrow('Invalid email or password');
+
+    // 3. Contact without passwordHash cannot log in
+    await expect(
+      service.login({ email: 'approver-nopass@example.com', password: 'demo123' }),
+    ).rejects.toThrow('Invalid email or password');
+  });
 });

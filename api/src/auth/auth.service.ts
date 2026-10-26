@@ -210,7 +210,7 @@ export class AuthService {
 
     if (!contact || !contact.isActive) return undefined;
 
-    // 1. If contact has an individual assigned password hash, use it
+    // Contact authentication: Only permitted if an explicit password hash was registered
     if (contact.passwordHash) {
       return {
         id: contact.id,
@@ -222,18 +222,7 @@ export class AuthService {
       };
     }
 
-    // 2. In demo mode only, fallback to demo123 for seeded/legacy demo contacts
-    if (this.isDemoEnabled()) {
-      return {
-        id: contact.id,
-        email: contact.email,
-        name: contact.name,
-        role: contact.role,
-        organizationId: contact.organizationId,
-        password: bcrypt.hashSync('demo123', 10),
-      };
-    }
-
+    // Contacts without a registered password (e.g., email-only approvers) cannot log in via credentials
     return undefined;
   }
 
