@@ -5,6 +5,8 @@ const defaultAllowedOrigins = [
   "localhost:3000",
   "127.0.0.1",
   "127.0.0.1:3000",
+  "collectflow-app.pages.dev",
+  "thoorigaibilltracker.com",
 ];
 
 const envAllowed = (process.env.ALLOWED_DEV_ORIGINS ?? "")
