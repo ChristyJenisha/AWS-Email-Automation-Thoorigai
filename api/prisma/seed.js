@@ -79,7 +79,7 @@ try {
 
   const batch = await prisma.batch.upsert({
     where: { id: 'demo-batch' },
-    update: { organizationId: organization.id, templateId: template.id, status: 'IN_PROGRESS' },
+    update: { organizationId: organization.id, templateId: template.id, status: 'IN_PROGRESS', deletedAt: null },
     create: {
       id: 'demo-batch',
       organizationId: organization.id,

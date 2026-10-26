@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { LogIn, Shield, User, AlertCircle, KeyRound, Mail } from "lucide-react";
+import { LogIn, Shield, User, AlertCircle, KeyRound, Mail, ArrowRight, LogOut, CheckCircle2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useDataContext } from "../../lib/DataContext";
 import { Button } from "../ui";
 
 export function SignInView() {
-  const { loginWithCredentials } = useDataContext();
+  const router = useRouter();
+  const { currentUser, signOut, loginWithCredentials } = useDataContext();
   const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
   const [email, setEmail] = useState(() =>
     process.env.NEXT_PUBLIC_DEMO_MODE === "true" ? "admin@example.test" : ""
@@ -25,6 +27,8 @@ export function SignInView() {
       const success = await loginWithCredentials(loginEmail, pass);
       if (!success) {
         setError("Sign-in failed. Please verify credentials or check that the API service is reachable.");
+      } else {
+        router.push("/");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred during sign-in.");
@@ -105,6 +109,59 @@ export function SignInView() {
 
         {/* Content Body */}
         <div style={{ padding: "24px 28px" }}>
+          {currentUser && (
+            <div
+              style={{
+                marginBottom: 20,
+                padding: "12px 14px",
+                background: "var(--bg-subtle)",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--border-light)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  color: "var(--brand-primary)",
+                  fontWeight: 600,
+                  fontSize: 12.5,
+                  marginBottom: 4,
+                }}
+              >
+                <CheckCircle2 size={15} />
+                <span>Active Session</span>
+              </div>
+              <div style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: 700 }}>
+                {currentUser.name}
+              </div>
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 12 }}>
+                {currentUser.email} • Role: <strong>{currentUser.role}</strong>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Button
+                  variant="primary"
+                  type="button"
+                  onClick={() => router.push("/")}
+                  style={{ flex: 1, padding: "6px 12px", fontSize: 12 }}
+                >
+                  <span>Open Dashboard</span>
+                  <ArrowRight size={13} />
+                </Button>
+                <Button
+                  variant="secondary"
+                  type="button"
+                  onClick={() => signOut()}
+                  style={{ padding: "6px 12px", fontSize: 12 }}
+                >
+                  <LogOut size={13} />
+                  <span>Sign Out</span>
+                </Button>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div
               style={{

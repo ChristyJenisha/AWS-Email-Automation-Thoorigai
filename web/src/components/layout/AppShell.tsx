@@ -110,8 +110,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  // Isolate no-auth approval portal: skip app shell to avoid UI duplication
-  if (isApproverRoute(pathname)) {
+  // Isolate no-auth approval portal and direct login page: skip app shell to avoid UI duplication
+  if (isApproverRoute(pathname) || pathname === "/login") {
     return <main>{children}</main>;
   }
 
