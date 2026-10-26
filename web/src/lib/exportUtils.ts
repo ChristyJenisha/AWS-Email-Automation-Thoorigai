@@ -62,3 +62,4 @@ export function exportBatchesToCSV(batches: BatchRecord[], filenamePrefix = "col
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+

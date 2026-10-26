@@ -864,7 +864,7 @@ export default function SettingsPage() {
                     </td>
 
                     {isAdmin && (
-                      <td style={{ textAlign: "right" }}>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                         <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                           <Button
                             variant="outline"
@@ -1044,7 +1044,7 @@ export default function SettingsPage() {
                     </td>
 
                     {isAdmin && (
-                      <td style={{ textAlign: "right" }}>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                         <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                           <Button
                             variant="outline"
@@ -2008,18 +2008,37 @@ export default function SettingsPage() {
               <span>Account is active</span>
             </label>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isSubmittingContact}
-                onClick={() => setEditContactOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" variant="primary" isLoading={isSubmittingContact}>
-                Save Changes
-              </Button>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 14 }}>
+              {isAdmin && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={isSubmittingContact}
+                  leftIcon={<Trash2 size={13} />}
+                  onClick={() => {
+                    const target = editingContact;
+                    setEditContactOpen(false);
+                    setDeleteContactTarget(target);
+                  }}
+                >
+                  Delete {isModalForAdmin ? "Administrator" : "Approver"}
+                </Button>
+              )}
+
+              <div style={{ display: "flex", gap: 10, marginLeft: "auto" }}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isSubmittingContact}
+                  onClick={() => setEditContactOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" isLoading={isSubmittingContact}>
+                  Save Changes
+                </Button>
+              </div>
             </div>
           </form>
         )}
