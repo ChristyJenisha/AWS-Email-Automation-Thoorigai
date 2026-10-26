@@ -7,6 +7,7 @@ RUN apk add --no-cache openssl libc6-compat
 
 COPY package.json package-lock.json ./
 COPY api/package.json api/package.json
+COPY api/prisma api/prisma/
 COPY web/package.json web/package.json
 
 RUN npm ci
@@ -28,10 +29,11 @@ ENV PORT=3001
 
 COPY package.json package-lock.json ./
 COPY api/package.json api/package.json
+COPY api/prisma api/prisma/
 COPY web/package.json web/package.json
 
-# Install production dependencies only
-RUN npm ci --omit=dev
+# Install production dependencies only (scripts ignored; prisma copied from builder)
+RUN npm ci --omit=dev --ignore-scripts
 
 # Copy generated Prisma engine & client from builder
 COPY --from=builder /workspace/node_modules/@prisma /workspace/node_modules/@prisma
@@ -48,4 +50,4 @@ EXPOSE 3001
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3001/health || exit 1
 
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]
