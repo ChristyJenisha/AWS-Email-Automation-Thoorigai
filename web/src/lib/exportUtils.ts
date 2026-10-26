@@ -1,4 +1,5 @@
 import { BatchRecord } from "../types";
+import { formatBatchId } from "./utils";
 
 /**
  * Exports an array of Batch records to a CSV file and triggers a browser download.
@@ -11,7 +12,7 @@ export function exportBatchesToCSV(batches: BatchRecord[], filenamePrefix = "col
 
   const headers = [
     "Batch ID",
-    "Batch Name",
+    "Batch Identifier",
     "Status",
     "Total Bills",
     "Total Amount (INR)",
@@ -34,18 +35,25 @@ export function exportBatchesToCSV(batches: BatchRecord[], filenamePrefix = "col
     const approverName = activeStep?.stage?.contact?.name ?? "N/A";
     const stageOrder = activeStep?.stage?.order ? `Stage ${activeStep.stage.order}` : "Completed / Waiting";
     const billsCount = batch.bills?.length ?? 0;
-    const totalAmount = batch.totalAmount ?? 0;
+    const totalAmount = (batch.bills ?? []).reduce(
+      (sum, bill) => sum + Number(bill.amount || 0),
+      0
+    );
+    const formattedBatchName = `Batch ${formatBatchId(batch.id)}`;
+    const formattedCreatedAt = batch.createdAt
+      ? new Date(batch.createdAt).toLocaleString()
+      : "N/A";
 
     return [
       escapeCSV(batch.id),
-      escapeCSV(batch.name || "Untitled Batch"),
-      escapeCSV(batch.status),
+      escapeCSV(formattedBatchName),
+      escapeCSV(batch.status ?? "N/A"),
       billsCount,
       totalAmount,
       escapeCSV(batch.template?.name || "Standard Workflow"),
       escapeCSV(stageOrder),
       escapeCSV(approverName),
-      escapeCSV(new Date(batch.createdAt).toLocaleString()),
+      escapeCSV(formattedCreatedAt),
     ].join(",");
   });
 
