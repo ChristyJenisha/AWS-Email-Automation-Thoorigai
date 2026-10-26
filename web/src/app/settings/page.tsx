@@ -755,7 +755,7 @@ export default function SettingsPage() {
                 Team & System Administrators ({adminContacts.length})
               </h3>
               <p style={{ margin: "2px 0 0", color: "var(--text-secondary)", fontSize: 13 }}>
-                Internal operators and team leads authorized to log into the dashboard with their email & password.
+                Internal operators and team leads authorized to log into the dashboard with their email & password. Administrators can also be assigned as stage approvers in workflow templates.
               </p>
             </div>
 
