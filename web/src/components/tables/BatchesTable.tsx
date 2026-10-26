@@ -1,9 +1,10 @@
 "use client";
 
 import React from "react";
-import { History, Trash2, Clock, CheckCircle, AlertTriangle } from "lucide-react";
+import { History, Trash2, Clock, Download } from "lucide-react";
 import { AppUser, BatchRecord } from "../../types";
 import { formatCurrency, formatBatchId } from "../../lib/utils";
+import { exportBatchesToCSV } from "../../lib/exportUtils";
 
 type BatchFilterType = "ALL" | "IN_PROGRESS" | "READY_FOR_PAYMENT" | "COMPLETED";
 
@@ -46,7 +47,7 @@ export function BatchesTable({
         </div>
       </div>
 
-      <div className="table-toolbar">
+      <div className="table-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
         <div className="filter-tabs" role="tablist" aria-label="Filter batches">
           {BATCH_FILTER_TABS.map((tab) => {
             const count =
@@ -67,6 +68,28 @@ export function BatchesTable({
             );
           })}
         </div>
+
+        <button
+          type="button"
+          onClick={() => exportBatchesToCSV(filteredBatches)}
+          className="ui-button ui-button--outline"
+          title="Export current filtered ledger into CSV / Excel format"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 12.5,
+            padding: "6px 12px",
+            borderRadius: "var(--radius-md)",
+            border: "1px solid var(--border-light)",
+            background: "var(--bg-surface)",
+            cursor: "pointer",
+            fontWeight: 600,
+          }}
+        >
+          <Download size={14} />
+          <span>Export CSV</span>
+        </button>
       </div>
 
       <div className="table-wrap">

@@ -27,6 +27,7 @@ import {
   Eye,
   ChevronDown,
   CreditCard,
+  Download,
 } from "lucide-react";
 import { useDataContext } from "../../lib/DataContext";
 import {
@@ -37,6 +38,7 @@ import {
   formatBatchId,
   formatStageDuration,
 } from "../../lib/utils";
+import { exportBatchesToCSV } from "../../lib/exportUtils";
 import {
   Badge,
   Button,
@@ -681,6 +683,32 @@ function BatchesContent() {
               Reset Filters
             </button>
           )}
+
+          {/* Export to CSV Button */}
+          <div style={{ marginLeft: "auto" }}>
+            <button
+              type="button"
+              onClick={() => exportBatchesToCSV(filteredBatches)}
+              className="ui-button ui-button--outline"
+              title="Download current ledger as CSV spreadsheet"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "8px 14px",
+                fontSize: 13,
+                fontWeight: 600,
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--border-strong)",
+                background: "var(--bg-surface)",
+                color: "var(--text-primary)",
+                cursor: "pointer",
+              }}
+            >
+              <Download size={14} />
+              <span>Export CSV</span>
+            </button>
+          </div>
         </div>
       </div>
 

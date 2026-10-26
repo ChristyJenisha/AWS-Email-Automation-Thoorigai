@@ -30,3 +30,4 @@ finally {
     [System.GC]::Collect()
     [System.GC]::WaitForPendingFinalizers()
 }
+
