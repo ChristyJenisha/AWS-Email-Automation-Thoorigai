@@ -303,10 +303,6 @@ export default function SettingsPage() {
       setNotice({ type: "error", message: "Password must be at least 6 characters long for an Administrator." });
       return;
     }
-    if (!isModalForAdmin && contactDraft.password.trim() && contactDraft.password.trim().length < 6) {
-      setNotice({ type: "error", message: "Password must be at least 6 characters long." });
-      return;
-    }
 
     setIsSubmittingContact(true);
     setNotice(null);
@@ -321,7 +317,7 @@ export default function SettingsPage() {
           name: contactDraft.name.trim(),
           email: contactDraft.email.trim(),
           role: contactDraft.role.trim() || "APPROVER",
-          ...(contactDraft.password.trim() ? { password: contactDraft.password.trim() } : {}),
+          ...(isModalForAdmin && contactDraft.password.trim() ? { password: contactDraft.password.trim() } : {}),
         }),
       });
 
@@ -344,7 +340,7 @@ export default function SettingsPage() {
   const handleEditContact = async (e: FormEvent) => {
     e.preventDefault();
     if (!isAdmin || !authToken || !currentUser || !editingContact) return;
-    if (editContactPassword.trim() && editContactPassword.trim().length < 6) {
+    if (isModalForAdmin && editContactPassword.trim() && editContactPassword.trim().length < 6) {
       setNotice({ type: "error", message: "New password must be at least 6 characters long." });
       return;
     }
@@ -366,7 +362,7 @@ export default function SettingsPage() {
             email: editingContact.email.trim(),
             role: editingContact.role.trim(),
             isActive: editingContact.isActive,
-            ...(editContactPassword.trim() ? { password: editContactPassword.trim() } : {}),
+            ...(isModalForAdmin && editContactPassword.trim() ? { password: editContactPassword.trim() } : {}),
           }),
         }
       );
@@ -1932,7 +1928,7 @@ export default function SettingsPage() {
               </label>
             )}
 
-            {isModalForAdmin && (
+            {isModalForAdmin ? (
               <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -1982,6 +1978,20 @@ export default function SettingsPage() {
                   </button>
                 </div>
               </label>
+            ) : (
+              <div
+                style={{
+                  padding: "10px 12px",
+                  background: "var(--bg-subtle)",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border-light)",
+                  fontSize: 12,
+                  color: "var(--text-secondary)",
+                  lineHeight: 1.4,
+                }}
+              >
+                💡 <strong>Passwordless Approver:</strong> Approvers do not require a login password. They review and authorize bills strictly via secure, time-limited 1-click email authorization links.
+              </div>
             )}
 
             <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", marginTop: 4 }}>
