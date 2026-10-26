@@ -20,6 +20,7 @@ import {
   ChevronDown,
   Eye,
   TrendingUp,
+  Trash2,
 } from "lucide-react";
 import { useDataContext } from "../lib/DataContext";
 import {
@@ -88,6 +89,11 @@ export default function CommandCenterPage() {
   const [reassignReason, setReassignReason] = useState("");
   const [isSubmittingReassign, setIsSubmittingReassign] = useState(false);
   const [reassignError, setReassignError] = useState("");
+
+  // Delete Batch Modal State
+  const [deleteModalTarget, setDeleteModalTarget] = useState<BatchRecord | null>(null);
+  const [isSubmittingDelete, setIsSubmittingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Audit Slide-Over Sheet State
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
@@ -275,6 +281,35 @@ export default function CommandCenterPage() {
       // ignore
     } finally {
       setIsLoadingHistory(false);
+    }
+  };
+
+  // Delete Batch Action
+  const handleDeleteBatch = async () => {
+    if (!deleteModalTarget) return;
+    if (currentUser?.role?.toLowerCase() !== "admin") {
+      setDeleteError("Access denied: Only administrators can delete batches.");
+      return;
+    }
+
+    setIsSubmittingDelete(true);
+    setDeleteError(null);
+    try {
+      const apiBase = getApiBase();
+      const res = await authFetch(`${apiBase}/batches/${encodeURIComponent(deleteModalTarget.id)}`, authToken, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.message || "Failed to delete batch.");
+      }
+      setDeleteModalTarget(null);
+      setFeedbackNotice(`Batch ${formatBatchId(deleteModalTarget.id)} was successfully soft-deleted.`);
+      await refreshData();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete batch.");
+    } finally {
+      setIsSubmittingDelete(false);
     }
   };
 
@@ -777,6 +812,19 @@ export default function CommandCenterPage() {
                                   router.push(`/batches/${encodeURIComponent(batch.id)}`);
                                 },
                               },
+                              ...(currentUser?.role?.toLowerCase() === "admin"
+                                ? [
+                                    {
+                                      label: "Delete Batch",
+                                      icon: <Trash2 size={14} />,
+                                      variant: "danger" as const,
+                                      onClick: () => {
+                                        setDeleteModalTarget(batch);
+                                        setDeleteError(null);
+                                      },
+                                    },
+                                  ]
+                                : []),
                             ]}
                           />
                         </div>
@@ -1019,6 +1067,67 @@ export default function CommandCenterPage() {
                 isLoading={isSubmittingReassign}
               >
                 Reassign Step
+              </Button>
+            </div>
+          </div>
+        </ModalDialog>
+      )}
+
+      {/* Delete Batch Modal */}
+      {deleteModalTarget && (
+        <ModalDialog
+          isOpen={Boolean(deleteModalTarget)}
+          onClose={() => setDeleteModalTarget(null)}
+          title="Delete Batch"
+          description="Are you sure you want to delete this approval batch and its associated invoices?"
+        >
+          <div style={{ display: "grid", gap: 14 }}>
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: 8,
+                background: "var(--urgency-rose-bg)",
+                border: "1px solid var(--urgency-rose-border)",
+                color: "var(--urgency-rose)",
+              }}
+            >
+              <p style={{ margin: 0, fontWeight: 600 }}>This action soft-deletes the batch from the active ledger.</p>
+              <p style={{ margin: "4px 0 0", fontSize: 12 }}>
+                Batch {formatBatchId(deleteModalTarget.id)} with {(deleteModalTarget.bills ?? []).length} invoices will be removed.
+              </p>
+            </div>
+
+            {deleteError && (
+              <div
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 6,
+                  background: "var(--urgency-rose-bg)",
+                  border: "1px solid var(--urgency-rose)",
+                  color: "var(--urgency-rose)",
+                  fontSize: 13,
+                }}
+              >
+                {deleteError}
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setDeleteModalTarget(null)}
+                disabled={isSubmittingDelete}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => void handleDeleteBatch()}
+                isLoading={isSubmittingDelete}
+              >
+                Delete Batch
               </Button>
             </div>
           </div>
