@@ -991,13 +991,20 @@ export class WorkflowTransitionsService {
     if (!this.emailService) return;
     try {
       const stageOrder = step.stage.order;
-      const batchRef = step.batchId.slice(0, 8);
       const bills = step.batch?.bills ?? [];
       const totalAmount = bills.reduce((sum: number, b: any) => sum + Number(b.amount || 0), 0);
+      const batchBills = step.batch?.bills;
+      const rawBatchId = step.batch?.id || step.batchId || '';
+      const batchName =
+        batchBills?.length === 1 && batchBills[0]?.billNumber
+          ? batchBills[0].billNumber
+          : batchBills && batchBills.length > 1
+            ? batchBills.map((b: any) => b.billNumber).join(', ')
+            : (step.batch?.template?.name || (rawBatchId.length > 8 ? `B-${rawBatchId.slice(-6).toUpperCase()}` : (rawBatchId || 'Batch')));
 
       const subject = hasNextStage
-        ? `Thoorigai Ledger: Stage ${stageOrder} Approval Recorded (Batch #${batchRef})`
-        : `Thoorigai Ledger: Batch #${batchRef} Fully Approved`;
+        ? `Thoorigai Ledger: Stage ${stageOrder} Approval Recorded (Batch ${batchName})`
+        : `Thoorigai Ledger: Batch ${batchName} Fully Approved`;
 
       const baseUrl = process.env.APPROVAL_APP_URL || 'http://localhost:3000';
       const html = buildApprovalEmailHtml({
@@ -1005,9 +1012,11 @@ export class WorkflowTransitionsService {
           ? `Stage ${stageOrder} Approval Recorded`
           : `Batch Approval Completed`,
         leadMessage: hasNextStage
-          ? `Thank you. Your review for Stage ${stageOrder} of batch #${batchRef} has been recorded. The batch has advanced to the next workflow stage.`
-          : `Thank you. All review stages for batch #${batchRef} have been approved. The batch is now ready for payment disbursement.`,
+          ? `Thank you. Your review for Stage ${stageOrder} of batch ${batchName} has been recorded. The batch has advanced to the next workflow stage.`
+          : `Thank you. All review stages for batch ${batchName} have been approved. The batch is now ready for payment disbursement.`,
         batchId: step.batchId,
+        batchName: batchName,
+        batchLabel: 'Batch Name:',
         stageOrder,
         totalAmount: totalAmount > 0 ? totalAmount.toLocaleString('en-IN') : undefined,
         ctaUrl: hasNextStage ? undefined : `${baseUrl}/payments`,
@@ -1018,7 +1027,7 @@ export class WorkflowTransitionsService {
       await this.emailService.sendReminderEmail({
         to: approverEmail,
         subject,
-        body: `Your approval for Stage ${stageOrder} of batch #${batchRef} was successfully recorded.${
+        body: `Your approval for Stage ${stageOrder} of batch ${batchName} was successfully recorded.${
           hasNextStage ? ' The batch has advanced to the next stage.' : ` All stages are complete; ready for payment: ${baseUrl}/payments`
         }`,
         html,
@@ -1041,25 +1050,34 @@ export class WorkflowTransitionsService {
               },
             },
           },
-          bills: true,
+          template: { select: { id: true, name: true } },
+          bills: { orderBy: { createdAt: 'asc' } },
         },
       });
       if (!batch) return;
 
-      const batchRef = batch.id.slice(0, 8);
       const totalAmount = batch.bills.reduce((sum, b) => sum + Number(b.amount || 0), 0);
       const baseUrl = process.env.APPROVAL_APP_URL || 'http://localhost:3000';
       const paymentsUrl = `${baseUrl}/payments`;
 
-      const subject = `Thoorigai Ledger: Batch #${batchRef} Ready for Payment Recording`;
+      const batchName =
+        batch.bills?.length === 1 && batch.bills[0]?.billNumber
+          ? batch.bills[0].billNumber
+          : batch.bills && batch.bills.length > 1
+            ? batch.bills.map((b) => b.billNumber).join(', ')
+            : (batch.template?.name || (batch.id.length > 8 ? `B-${batch.id.slice(-6).toUpperCase()}` : batch.id));
+
+      const subject = `Action Required: Batch ${batchName} Fully Approved — Ready for Payment Recording`;
       const html = buildApprovalEmailHtml({
-        headline: `Payment Recording: Batch #${batchRef}`,
-        leadMessage: `All review stages have been completed for batch #${batchRef} in ${batch.organization.name}. The batch is now ready for payment recording.`,
+        headline: `Payment Recording Alert: Batch ${batchName}`,
+        leadMessage: `All workflow verification stages have been completed for batch ${batchName} in ${batch.organization.name}. The batch is now waiting in the payment queue for bank disbursement and UTR reference recording.`,
         batchId: batch.id,
+        batchName: batchName,
+        batchLabel: 'Batch Name:',
         totalAmount: totalAmount > 0 ? totalAmount.toLocaleString('en-IN') : undefined,
         ctaUrl: paymentsUrl,
-        ctaText: 'Open Payment Queue →',
-        subNotice: 'Open the payment queue to record disbursement details.',
+        ctaText: 'Record Payment',
+        subNotice: `Prompt payment recording updates invoice balances to PAID and finalizes the settlement audit trail.`,
       });
 
       // Target admin / finance recipients:
@@ -1079,7 +1097,7 @@ export class WorkflowTransitionsService {
         await this.emailService.sendReminderEmail({
           to: recipient,
           subject,
-          body: `Batch #${batchRef} in ${batch.organization.name} has completed all approval stages and is waiting for payment recording (Total: Rs. ${totalAmount.toLocaleString('en-IN')}). Disburse and record payment here: ${paymentsUrl}`,
+          body: `All workflow verification stages have been completed for batch ${batchName} in ${batch.organization.name}. The batch is now waiting in the payment queue for bank disbursement and UTR reference recording. (Total: Rs. ${totalAmount.toLocaleString('en-IN')}). Disburse and record payment here: ${paymentsUrl}\n\nPrompt payment recording updates invoice balances to PAID and finalizes the settlement audit trail.`,
           html,
         });
       }
