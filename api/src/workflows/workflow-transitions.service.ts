@@ -898,7 +898,8 @@ export class WorkflowTransitionsService {
             select: {
               organizationId: true,
               organization: { select: { name: true } },
-              bills: { select: { amount: true } },
+              bills: { select: { amount: true, billNumber: true } },
+              template: { select: { id: true, name: true } },
             },
           },
         },
@@ -911,24 +912,33 @@ export class WorkflowTransitionsService {
       const link = await this.getApprovalLink(nextStep.id, code);
       const totalAmount = nextStep.batch.bills?.reduce((sum, b) => sum + Number(b.amount), 0) ?? 0;
 
+      const batchBills = nextStep.batch.bills;
+      const rawBatchId = nextStep.batchId || '';
+      const batchName =
+        batchBills?.length === 1 && batchBills[0]?.billNumber
+          ? batchBills[0].billNumber
+          : batchBills && batchBills.length > 1
+            ? batchBills.map((b) => b.billNumber).join(', ')
+            : (nextStep.batch.template?.name || (rawBatchId.length > 8 ? `B-${rawBatchId.slice(-6).toUpperCase()}` : (rawBatchId || 'Batch')));
+
       const html = buildApprovalEmailHtml({
         headline: `Stage ${nextStep.stage.order} Review Request`,
         recipientName: approver.name,
-        leadMessage: `A batch in ${nextStep.batch.organization.name} has advanced to Stage ${nextStep.stage.order} and is ready for your review.`,
+        leadMessage: `A bill collection batch has advanced to Stage ${nextStep.stage.order} and is ready for your verification.`,
         batchId: nextStep.batchId,
+        batchName: batchName,
+        batchLabel: 'Batch Name:',
         stageOrder: nextStep.stage.order,
         totalAmount: totalAmount > 0 ? totalAmount.toLocaleString('en-IN') : undefined,
-        otpCode: code,
-        otpExpiresMinutes: 30,
         ctaUrl: link.url,
-        ctaText: 'Review Batch →',
-        subNotice: 'Click above to open the batch details. Your authorization code is applied automatically.',
+        ctaText: 'Review & Approve Batch',
+        subNotice: 'Click above to securely review and approve this batch.',
       });
 
       await this.emailService.sendReminderEmail({
         to: approver.email,
-        subject: `Thoorigai Ledger: Stage ${nextStep.stage.order} review for batch #${nextStep.batchId.slice(0, 8)}`,
-        body: `Hello ${approver.name},\n\nA batch has reached Stage ${nextStep.stage.order} and is ready for your review. Authorization Code: ${code}.\n\nReview here: ${link.url}`,
+        subject: `Approval required for batch ${batchName}`,
+        body: `Hello ${approver.name},\n\nA bill collection batch has advanced to Stage ${nextStep.stage.order} and is ready for your verification.\n\nBatch Name: ${batchName}\nWorkflow Stage: Stage ${nextStep.stage.order}\n\nReview & Approve Batch: ${link.url}\n\nClick above to securely review and approve this batch.`,
         html,
       });
     } catch (error) {
@@ -1020,7 +1030,7 @@ export class WorkflowTransitionsService {
         stageOrder,
         totalAmount: totalAmount > 0 ? totalAmount.toLocaleString('en-IN') : undefined,
         ctaUrl: hasNextStage ? undefined : `${baseUrl}/payments`,
-        ctaText: hasNextStage ? undefined : 'Open Payment Queue →',
+        ctaText: hasNextStage ? undefined : 'Open Payment Queue',
         subNotice: `Recorded at ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST).`,
       });
 
