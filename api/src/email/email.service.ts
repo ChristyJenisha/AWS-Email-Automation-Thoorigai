@@ -174,7 +174,8 @@ export class EmailService {
           </div>`,
           headers: {
             'X-Auto-Response-Suppress': 'OOF, AutoReply',
-            'Precedence': 'bulk',
+            'X-Priority': '1',
+            'Importance': 'High',
           },
         });
         console.log(`[EMAIL_SENT_SMTP] To: ${to} (MessageId: ${info.messageId})`);
