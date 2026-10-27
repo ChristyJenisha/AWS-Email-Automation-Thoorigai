@@ -24,7 +24,14 @@ export class RemindersService {
             backupContact: { select: { id: true, email: true, name: true, isActive: true } },
           },
         },
-        batch: { select: { organizationId: true } },
+        batch: {
+          select: {
+            id: true,
+            organizationId: true,
+            template: { select: { id: true, name: true } },
+            bills: { select: { billNumber: true }, orderBy: { createdAt: 'asc' } },
+          },
+        },
       },
     });
 
@@ -37,6 +44,15 @@ export class RemindersService {
         ? step.stage.backupContact
         : null;
     if (!approver?.email || !approver.id) return { status: 'skipped' as const, reason: 'no_approver_email' };
+
+    const batchBills = (step.batch as any)?.bills;
+    const rawBatchId = (step.batch as any)?.id || step.batchId || '';
+    const batchName =
+      batchBills?.length === 1 && batchBills[0]?.billNumber
+        ? batchBills[0].billNumber
+        : batchBills && batchBills.length > 1
+          ? batchBills.map((b: any) => b.billNumber).join(', ')
+          : ((step.batch as any)?.template?.name || (rawBatchId.length > 8 ? `B-${rawBatchId.slice(-6).toUpperCase()}` : (rawBatchId || 'Batch')));
 
     const notification = await this.prisma.notification.create({
       data: {
@@ -71,6 +87,7 @@ export class RemindersService {
         recipientName: approver.name,
         leadMessage: 'A new batch has been prepared and is ready for your Stage 1 review.',
         batchId: step.batchId,
+        batchName: batchName,
         stageOrder: 1,
         otpCode: initialOtpCode,
         otpExpiresMinutes: 30,
@@ -108,24 +125,23 @@ export class RemindersService {
           }
 
           const backupHtml = buildApprovalEmailHtml({
-            headline: 'Stage 1 Review Request (Backup Reviewer)',
+            headline: 'Action Required (Backup Approver): Stage 1 Workflow Approval',
             recipientName: step.stage.backupContact.name,
             leadMessage:
-              'A new batch has been prepared. As assigned backup reviewer, you can also review and authorize this batch.',
+              'A new bill collection batch has been initialized. As assigned backup approver, you can also review and authorize this batch.',
             batchId: step.batchId,
+            batchName: batchName,
+            batchLabel: 'Batch Name:',
             stageOrder: 1,
-            otpCode: initialOtpCode,
-            otpExpiresMinutes: 30,
             ctaUrl: backupApprovalUrl.toString(),
-            ctaText: 'Review Batch →',
-            subNotice:
-              'Click above to open the batch details. Your authorization code is applied automatically.',
+            ctaText: 'Review & Approve Batch',
+            subNotice: 'Click above to securely review and approve this batch.',
           });
 
           await this.emailService.sendReminderEmail({
             to: step.stage.backupContact.email,
-            subject: `Approval required (Backup Approver) for batch ${step.batchId}`,
-            body: `Hello ${step.stage.backupContact.name},\n\nA batch is ready for your review.${initialOtpCode ? `\nAuthorization Code: ${initialOtpCode}` : ''}\n\nReview it here: ${backupApprovalUrl.toString()}`,
+            subject: `Approval required (Backup Approver) for batch ${batchName}`,
+            body: `Hello ${step.stage.backupContact.name},\n\nA new bill collection batch has been initialized. As assigned backup approver, you can also review and authorize this batch.\n\nBatch Name: ${batchName}\nWorkflow Stage: Stage 1\n\nReview & Approve Batch: ${backupApprovalUrl.toString()}\n\nClick above to securely review and approve this batch.`,
             html: backupHtml,
           });
         } catch (backupErr) {

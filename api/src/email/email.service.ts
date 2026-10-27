@@ -23,6 +23,8 @@ export type ApprovalEmailTemplateInput = {
   recipientName?: string;
   leadMessage: string;
   batchId?: string;
+  batchName?: string;
+  batchLabel?: string;
   stageOrder?: number;
   totalAmount?: number | string;
   otpCode?: string;
@@ -33,38 +35,40 @@ export type ApprovalEmailTemplateInput = {
 };
 
 export function buildApprovalEmailHtml(input: ApprovalEmailTemplateInput): string {
-  const brandName = 'Thoorigai Infotech';
+  const brandName = 'Thoorigai Ledger';
   const ctaBtn = input.ctaUrl
     ? `
       <div style="text-align: center; margin: 24px 0 16px 0;">
         <a href="${input.ctaUrl}" style="background-color: #0f766e; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 12px 26px; border-radius: 6px; display: inline-block;">
-          ${input.ctaText || 'Review Batch'}
+          ${input.ctaText || 'Review & Approve Batch'}
         </a>
       </div>
-      <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0 0 12px 0;">
-        <a href="${input.ctaUrl}" style="color: #0f766e; text-decoration: underline;">Or click here to review the batch</a>
+      <p style="font-size: 11px; color: #64748b; text-align: center; margin: 0 0 16px 0; word-break: break-all;">
+        Or open directly: <a href="${input.ctaUrl}" style="color: #0f766e;">${input.ctaUrl}</a>
       </p>
     `
     : '';
 
   const otpBox = input.otpCode
     ? `
-      <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 16px; text-align: center; margin: 20px 0;">
-        <div style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">
-          Authorization Code
+      <div style="background-color: #f8fafc; border: 2px dashed #0f766e; border-radius: 8px; padding: 20px 16px; text-align: center; margin: 24px 0;">
+        <div style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px;">
+          SINGLE-USE VERIFICATION CODE
         </div>
-        <div style="font-size: 28px; font-weight: 700; letter-spacing: 6px; color: #0f172a; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; margin: 4px 0;">
+        <div style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #0f172a; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; margin: 6px 0;">
           ${input.otpCode}
         </div>
-        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
-          Valid for ${input.otpExpiresMinutes ?? 30} minutes
+        <div style="font-size: 12px; color: #64748b; margin-top: 6px;">
+          Enter this code manually on the approval page (valid for ${input.otpExpiresMinutes ?? 30} minutes)
         </div>
       </div>
     `
     : '';
 
   const metaItems: string[] = [];
-  if (input.batchId) metaItems.push(`<tr><td style="padding: 6px 0; color: #64748b; font-size: 13px;">Batch Reference:</td><td style="padding: 6px 0; color: #0f172a; font-weight: 600; font-size: 13px; text-align: right;">${input.batchId.slice(0, 12)}</td></tr>`);
+  const batchDisplay = input.batchName || (input.batchId ? input.batchId.slice(0, 12) : undefined);
+  const batchLabel = input.batchLabel || (input.batchName ? 'Batch Name:' : 'Batch Reference:');
+  if (batchDisplay) metaItems.push(`<tr><td style="padding: 6px 0; color: #64748b; font-size: 13px;">${batchLabel}</td><td style="padding: 6px 0; color: #0f172a; font-weight: 600; font-size: 13px; text-align: right;">${batchDisplay}</td></tr>`);
   if (input.stageOrder) metaItems.push(`<tr><td style="padding: 6px 0; color: #64748b; font-size: 13px;">Workflow Stage:</td><td style="padding: 6px 0; color: #0f172a; font-weight: 600; font-size: 13px; text-align: right;">Stage ${input.stageOrder}</td></tr>`);
   if (input.totalAmount) metaItems.push(`<tr><td style="padding: 6px 0; color: #64748b; font-size: 13px;">Amount:</td><td style="padding: 6px 0; color: #0f766e; font-weight: 700; font-size: 13px; text-align: right;">₹${input.totalAmount}</td></tr>`);
 
