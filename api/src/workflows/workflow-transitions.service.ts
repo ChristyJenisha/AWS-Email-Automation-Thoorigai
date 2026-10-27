@@ -542,7 +542,7 @@ export class WorkflowTransitionsService {
     const url = new URL('/approve', baseUrl);
     url.searchParams.set('token', token);
     if (otpCode) {
-      url.searchParams.set('otp', otpCode);
+      url.searchParams.set('code', otpCode);
     }
     return { token, url: url.toString(), approverEmail: approver.email, organizationId: step.batch.organizationId };
   }
@@ -622,7 +622,7 @@ export class WorkflowTransitionsService {
     const baseUrl = process.env.APPROVAL_APP_URL || 'http://localhost:3000';
     const approvalUrlObj = new URL('/approve', baseUrl);
     approvalUrlObj.searchParams.set('token', token);
-    approvalUrlObj.searchParams.set('otp', code);
+    approvalUrlObj.searchParams.set('code', code);
     const approvalUrl = approvalUrlObj.toString();
     const remainingMinutes = Math.ceil((expiresAt.getTime() - now.getTime()) / 60_000);
 

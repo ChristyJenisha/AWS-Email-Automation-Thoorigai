@@ -78,7 +78,7 @@ export class RemindersService {
       const approvalUrl = new URL('/approve', process.env.APPROVAL_APP_URL ?? 'http://localhost:3000');
       approvalUrl.searchParams.set('token', token);
       if (initialOtpCode) {
-        approvalUrl.searchParams.set('otp', initialOtpCode);
+        approvalUrl.searchParams.set('code', initialOtpCode);
       }
       console.log('[APPROVAL_URL_DEBUG] hasToken=', approvalUrl.searchParams.has('token'), 'url=', approvalUrl.origin + approvalUrl.pathname + '?token-present');
 
@@ -120,7 +120,7 @@ export class RemindersService {
           );
           backupApprovalUrl.searchParams.set('token', backupToken);
           if (initialOtpCode) {
-            backupApprovalUrl.searchParams.set('otp', initialOtpCode);
+            backupApprovalUrl.searchParams.set('code', initialOtpCode);
           }
 
           const backupHtml = buildApprovalEmailHtml({
@@ -343,7 +343,7 @@ export class RemindersService {
     const approvalUrl = new URL('/approve', process.env.APPROVAL_APP_URL ?? 'http://localhost:3000');
     approvalUrl.searchParams.set('token', token);
     if (otpCode) {
-      approvalUrl.searchParams.set('otp', otpCode);
+      approvalUrl.searchParams.set('code', otpCode);
     }
     return approvalUrl.toString();
   }

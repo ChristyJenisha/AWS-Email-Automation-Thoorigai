@@ -112,10 +112,9 @@ export function buildApprovalEmailHtml(input: ApprovalEmailTemplateInput): strin
     </div>
 
     <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 24px; text-align: center; font-size: 11px; color: #64748b; line-height: 1.6;">
-      <strong>Thoorigai Ledger</strong> &bull; Bill Collection &amp; Workflow Authorization System<br/>
-      Sent automatically on behalf of Thoorigai Infotech.<br/>
-      This is a secure transactional message regarding pending financial batch authorizations.<br/>
-      If you did not anticipate this request, please contact your accounts administrator.
+      <strong>Thoorigai Ledger</strong> &bull; Bill Collection Workflow<br/>
+      Sent on behalf of Thoorigai Infotech for batch review.<br/>
+      For questions regarding this notification, please contact your administrator.
     </div>
   </div>
 </body>
@@ -141,7 +140,10 @@ export class EmailService {
     const rawPass = process.env.SMTP_PASS?.trim() || process.env.GMAIL_APP_PASSWORD?.trim();
     const smtpPass = rawPass ? rawPass.replace(/^["']|["']$/g, '').replace(/\s+/g, '') : undefined;
     const rawFrom = process.env.SMTP_FROM?.trim() || process.env.EMAIL_FROM?.trim() || smtpUser;
-    this.smtpFrom = rawFrom ? (rawFrom.includes('<') ? rawFrom : `"Thoorigai Infotech" <${rawFrom}>`) : undefined;
+    const cleanFrom = rawFrom?.includes('<')
+      ? rawFrom.replace(/["']?Thoorigai\s+Ledger["']?/i, '"Thoorigai Infotech"')
+      : (rawFrom ? `"Thoorigai Infotech" <${rawFrom}>` : undefined);
+    this.smtpFrom = cleanFrom;
 
     if (smtpHost && smtpUser && smtpPass) {
       const port = Number(process.env.SMTP_PORT ?? (smtpHost === 'smtp.gmail.com' ? 587 : 587));
