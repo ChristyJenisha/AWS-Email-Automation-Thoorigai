@@ -377,9 +377,9 @@ export default function PaymentsPage() {
     const apiBase = getApiBase();
     setIsUploadingProofFor(paymentId);
     try {
-      const response = await fetch(`${apiBase}/payments/${encodeURIComponent(paymentId)}/proof-file`, {
+      const response = await authFetch(`${apiBase}/payments/${encodeURIComponent(paymentId)}/proof-file`, authToken, {
         method: "PUT",
-        headers: { "Content-Type": file.type, Authorization: `Bearer ${authToken}` },
+        headers: { "Content-Type": file.type },
         body: file,
       });
 

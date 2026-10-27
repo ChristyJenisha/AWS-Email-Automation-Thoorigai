@@ -10,11 +10,12 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
+import { randomInt, timingSafeEqual } from 'node:crypto';
 import { BatchStatus, Prisma, StepStatus } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EmailService, buildApprovalEmailHtml } from '../email/email.service.js';
+import { WorkflowCryptoService } from './workflow-crypto.service.js';
 
 const transitionContext = {
   id: true,
@@ -47,10 +48,15 @@ const transitionContext = {
 
 @Injectable()
 export class WorkflowTransitionsService {
+  private readonly cryptoService: WorkflowCryptoService;
+
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly emailService?: EmailService,
-  ) {}
+    @Optional() cryptoService?: WorkflowCryptoService,
+  ) {
+    this.cryptoService = cryptoService ?? new WorkflowCryptoService();
+  }
 
   async complete(
     stepInstanceId: string,
@@ -548,14 +554,7 @@ export class WorkflowTransitionsService {
   }
 
   generateApprovalToken(stepInstanceId: string, actorId: string, organizationId?: string) {
-    const payload: Record<string, string> = {
-      stepInstanceId,
-      actorId,
-      organizationId: organizationId ?? '',
-    };
-    // The approval step's active status is the link's validity window. This
-    // also lets mail security scanners inspect a link without consuming it.
-    return jwt.sign(payload, this.getTokenSigningSecret());
+    return this.cryptoService.generateApprovalToken(stepInstanceId, actorId, organizationId);
   }
 
   async issueApprovalOtp(stepId: string, ttlMinutes = 30): Promise<{ code: string; expiresAt: Date }> {
@@ -726,7 +725,7 @@ export class WorkflowTransitionsService {
   }
 
   private hashApprovalOtp(stepId: string, code: string) {
-    return createHmac('sha256', this.getTokenSigningSecret()).update(`${stepId}:${code}`).digest('hex');
+    return this.cryptoService.hashApprovalOtp(stepId, code);
   }
 
   private async clearApprovalOtp(stepId: string, codeHash: string) {
@@ -737,26 +736,7 @@ export class WorkflowTransitionsService {
   }
 
   verifyApprovalToken(token: string, requireOtp = false): { stepInstanceId: string; actorId: string; organizationId?: string; otpVerified?: boolean } {
-    try {
-      const payload = jwt.verify(token, this.getTokenSigningSecret()) as Record<string, unknown>;
-
-      if (typeof payload.stepInstanceId !== 'string' || typeof payload.actorId !== 'string') {
-        throw new BadRequestException('Approval token is invalid');
-      }
-
-      if (requireOtp && payload.otpVerified !== true) {
-        throw new UnauthorizedException('Email verification is required before this action');
-      }
-
-      return {
-        stepInstanceId: payload.stepInstanceId,
-        actorId: payload.actorId,
-        organizationId: typeof payload.organizationId === 'string' ? payload.organizationId || undefined : undefined,
-        otpVerified: payload.otpVerified === true,
-      };
-    } catch {
-      throw new UnauthorizedException('Approval token is invalid');
-    }
+    return this.cryptoService.verifyApprovalToken(token, requireOtp);
   }
 
   async inspectApprovalToken(token: string) {
@@ -849,9 +829,7 @@ export class WorkflowTransitionsService {
   }
 
   private getTokenSigningSecret() {
-    const secret = process.env.TOKEN_SIGNING_SECRET;
-    if (!secret) throw new ServiceUnavailableException('Approval links are not configured');
-    return secret;
+    return this.cryptoService.getTokenSigningSecret();
   }
 
   private validateActor(actor: string) {

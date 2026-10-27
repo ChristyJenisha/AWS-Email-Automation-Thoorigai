@@ -152,13 +152,14 @@ export default function CommandCenterPage() {
 
   // Open Approval Magic Link
   const handleOpenMagicLink = async (stepId: string) => {
-    if (!authToken) return;
+    if (!currentUser) return;
     const apiBase = getApiBase();
     try {
-      const response = await fetch(`${apiBase}/workflows/steps/${encodeURIComponent(stepId)}/approval-link`, {
-        cache: "no-store",
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+      const response = await authFetch(
+        `${apiBase}/workflows/steps/${encodeURIComponent(stepId)}/approval-link`,
+        authToken,
+        { cache: "no-store" }
+      );
       if (!response.ok) throw new Error("Could not generate approval link");
       const data = (await response.json()) as { url: string; approverEmail: string };
       window.open(data.url, "_blank");

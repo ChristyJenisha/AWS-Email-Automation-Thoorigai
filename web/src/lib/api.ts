@@ -1,4 +1,4 @@
-import { AppUser } from "../types";
+import { AppUser, BatchHistoryRecord, PaymentRecord } from "../types";
 
 export function getApiBase(): string {
   if (typeof window !== "undefined") {
@@ -49,77 +49,53 @@ export async function getMeApi(): Promise<AppUser | null> {
 
 export async function authFetch(
   url: string,
-  token: string | null,
+  token?: string | null,
   init: RequestInit = {}
 ): Promise<Response> {
   const headers = new Headers(init.headers);
-  let activeToken = token;
-  if (!activeToken && typeof window !== "undefined") {
-    activeToken = window.localStorage.getItem("thoorigai-token");
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
   }
-  if (activeToken) {
-    headers.set("Authorization", `Bearer ${activeToken}`);
-  }
-  let response = await fetch(url, { ...init, headers, credentials: init.credentials ?? "include" });
-
-  // If unauthorized due to an expired token in demo mode, auto-refresh and retry seamlessly
-  if (
-    response.status === 401 &&
-    typeof window !== "undefined" &&
-    process.env.NEXT_PUBLIC_DEMO_MODE === "true"
-  ) {
-    try {
-      const storedUser = window.localStorage.getItem("thoorigai-user");
-      let loginEmail = "admin@example.test";
-      if (storedUser) {
-        const parsed = JSON.parse(storedUser) as { email?: string };
-        if (parsed?.email) loginEmail = parsed.email;
-      }
-      const refreshed = await loginApi(loginEmail, "demo123");
-      if (refreshed?.token) {
-        window.localStorage.setItem("thoorigai-token", refreshed.token);
-        window.localStorage.setItem("thoorigai-user", JSON.stringify(refreshed.user));
-        headers.set("Authorization", `Bearer ${refreshed.token}`);
-        response = await fetch(url, { ...init, headers });
-      }
-    } catch {
-      // return original response
-    }
-  }
-
-  return response;
+  return fetch(url, {
+    ...init,
+    headers,
+    credentials: init.credentials ?? "include",
+  });
 }
 
-export async function fetchDashboardData(token: string, organizationId = "demo-org") {
+export async function fetchDashboardData(
+  token?: string | null,
+  organizationId = "demo-org"
+) {
   const apiBase = getApiBase();
-  const headers = { Authorization: `Bearer ${token}` };
   return Promise.all([
-    fetch(`${apiBase}/workflows?organizationId=${encodeURIComponent(organizationId)}`, {
-      cache: "no-store",
-      headers,
-    }),
-    fetch(`${apiBase}/batches?organizationId=${encodeURIComponent(organizationId)}`, {
-      cache: "no-store",
-      headers,
-    }),
-    fetch(`${apiBase}/contacts?organizationId=${encodeURIComponent(organizationId)}`, {
-      cache: "no-store",
-      headers,
-    }),
+    authFetch(
+      `${apiBase}/workflows?organizationId=${encodeURIComponent(organizationId)}`,
+      token,
+      { cache: "no-store" }
+    ),
+    authFetch(
+      `${apiBase}/batches?organizationId=${encodeURIComponent(organizationId)}`,
+      token,
+      { cache: "no-store" }
+    ),
+    authFetch(
+      `${apiBase}/contacts?organizationId=${encodeURIComponent(organizationId)}`,
+      token,
+      { cache: "no-store" }
+    ),
   ]);
 }
 
 export async function fetchPaymentsForBatch(
   batchId: string,
-  token: string
+  token?: string | null
 ): Promise<PaymentRecord[]> {
   const apiBase = getApiBase();
-  const response = await fetch(
+  const response = await authFetch(
     `${apiBase}/payments/batch/${encodeURIComponent(batchId)}`,
-    {
-      cache: "no-store",
-      headers: { Authorization: `Bearer ${token}` },
-    }
+    token,
+    { cache: "no-store" }
   );
   if (!response.ok) return [];
   return (await response.json()) as PaymentRecord[];
@@ -127,15 +103,13 @@ export async function fetchPaymentsForBatch(
 
 export async function fetchBatchHistory(
   batchId: string,
-  token: string
+  token?: string | null
 ): Promise<BatchHistoryRecord> {
   const apiBase = getApiBase();
-  const response = await fetch(
+  const response = await authFetch(
     `${apiBase}/batches/${encodeURIComponent(batchId)}/history`,
-    {
-      cache: "no-store",
-      headers: { Authorization: `Bearer ${token}` },
-    }
+    token,
+    { cache: "no-store" }
   );
   if (!response.ok) {
     throw new Error("Unable to load batch audit trail and history.");

@@ -14,6 +14,10 @@ export class RemindersSchedulerService implements OnModuleInit, OnModuleDestroy 
   ) {}
 
   onModuleInit() {
+    if (process.env.ENABLE_SCHEDULER === 'false') {
+      this.logger.log('In-process reminder and outbox scheduler is DISABLED (ENABLE_SCHEDULER=false). Run worker process separately.');
+      return;
+    }
     this.task = cron.schedule(
       '* * * * *',
       async () => {

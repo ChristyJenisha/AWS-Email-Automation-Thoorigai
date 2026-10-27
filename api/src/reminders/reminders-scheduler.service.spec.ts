@@ -22,4 +22,20 @@ describe('RemindersSchedulerService', () => {
     await service.onModuleDestroy();
     expect(task.stop).toHaveBeenCalledOnce();
   });
+
+  it('skips scheduling when ENABLE_SCHEDULER is set to false', () => {
+    const original = process.env.ENABLE_SCHEDULER;
+    try {
+      process.env.ENABLE_SCHEDULER = 'false';
+      const schedule = vi.spyOn(cron, 'schedule');
+      const remindersService = { processDueReminders: vi.fn() } as unknown as RemindersService;
+      const service = new RemindersSchedulerService(remindersService);
+
+      service.onModuleInit();
+
+      expect(schedule).not.toHaveBeenCalled();
+    } finally {
+      process.env.ENABLE_SCHEDULER = original;
+    }
+  });
 });

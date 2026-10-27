@@ -17,24 +17,16 @@ import {
   UserPlus,
   Clock,
   ShieldAlert,
-  Eye,
-  EyeOff,
   KeyRound,
 } from "lucide-react";
 import { useDataContext } from "../../lib/DataContext";
-import { Button, Badge, ModalDialog } from "../../components/ui";
+import { Button, Badge } from "../../components/ui";
 import { ContactRecord, WorkflowRecord } from "../../types";
 import { initials } from "../../lib/utils";
-import { getApiBase } from "../../lib/api";
+import { authFetch, getApiBase } from "../../lib/api";
+import { WorkflowModals, ContactModals, StageDraft } from "../../components/settings";
 
 type TabType = "workflows" | "admins" | "contacts" | "policies";
-
-interface StageDraft {
-  contactId: string;
-  backupContactId: string;
-  reminderIntervalHours: number;
-  maxReminders: number;
-}
 
 export default function SettingsPage() {
   const { workflows, contacts, currentUser, authToken, refreshData } = useDataContext();
@@ -117,9 +109,9 @@ export default function SettingsPage() {
     const apiBase = getApiBase();
 
     try {
-      const response = await fetch(`${apiBase}/workflows`, {
+      const response = await authFetch(`${apiBase}/workflows`, authToken, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           organizationId: currentUser.organizationId || "demo-org",
           name: wfName.trim(),
@@ -165,9 +157,9 @@ export default function SettingsPage() {
     const apiBase = getApiBase();
 
     try {
-      const response = await fetch(`${apiBase}/workflows/${encodeURIComponent(editingWfId)}`, {
+      const response = await authFetch(`${apiBase}/workflows/${encodeURIComponent(editingWfId)}`, authToken, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: wfName.trim(),
           stages: wfStages.map((s) => ({
@@ -203,9 +195,8 @@ export default function SettingsPage() {
     const apiBase = getApiBase();
 
     try {
-      const response = await fetch(`${apiBase}/workflows/${encodeURIComponent(deleteWfTarget.id)}`, {
+      const response = await authFetch(`${apiBase}/workflows/${encodeURIComponent(deleteWfTarget.id)}`, authToken, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${authToken}` },
       });
 
       if (!response.ok) {
@@ -247,8 +238,6 @@ export default function SettingsPage() {
   const [contactDraft, setContactDraft] = useState({ name: "", email: "", role: "APPROVER", password: "" });
   const [editingContact, setEditingContact] = useState<ContactRecord | null>(null);
   const [editContactPassword, setEditContactPassword] = useState("");
-  const [showCreatePassword, setShowCreatePassword] = useState(false);
-  const [showEditPassword, setShowEditPassword] = useState(false);
   const [isSubmittingContact, setIsSubmittingContact] = useState(false);
 
   const filteredAdmins = useMemo(() => {
@@ -272,14 +261,12 @@ export default function SettingsPage() {
 
   const openCreateAdminModal = () => {
     setContactDraft({ name: "", email: "", role: "ADMIN", password: "" });
-    setShowCreatePassword(false);
     setIsModalForAdmin(true);
     setCreateContactOpen(true);
   };
 
   const openCreateApproverModal = () => {
     setContactDraft({ name: "", email: "", role: "APPROVER", password: "" });
-    setShowCreatePassword(false);
     setIsModalForAdmin(false);
     setCreateContactOpen(true);
   };
@@ -287,7 +274,6 @@ export default function SettingsPage() {
   const openEditContactModal = (c: ContactRecord) => {
     setEditingContact(c);
     setEditContactPassword("");
-    setShowEditPassword(false);
     setIsModalForAdmin(c.role?.toUpperCase() === "ADMIN");
     setEditContactOpen(true);
   };
@@ -326,9 +312,9 @@ export default function SettingsPage() {
     const apiBase = getApiBase();
 
     try {
-      const response = await fetch(`${apiBase}/contacts`, {
+      const response = await authFetch(`${apiBase}/contacts`, authToken, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           organizationId: currentUser.organizationId || "demo-org",
           name: contactDraft.name.trim(),
@@ -367,13 +353,14 @@ export default function SettingsPage() {
     const apiBase = getApiBase();
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${apiBase}/contacts/${encodeURIComponent(editingContact.id)}?organizationId=${encodeURIComponent(
           currentUser.organizationId || "demo-org"
         )}`,
+        authToken,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: editingContact.name.trim(),
             email: editingContact.email.trim(),
@@ -407,13 +394,14 @@ export default function SettingsPage() {
     const apiBase = getApiBase();
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${apiBase}/contacts/${encodeURIComponent(contact.id)}?organizationId=${encodeURIComponent(
           currentUser.organizationId || "demo-org"
         )}`,
+        authToken,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             isActive: !contact.isActive,
           }),
@@ -442,13 +430,13 @@ export default function SettingsPage() {
     const apiBase = getApiBase();
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${apiBase}/contacts/${encodeURIComponent(deleteContactTarget.id)}?organizationId=${encodeURIComponent(
           currentUser.organizationId || "demo-org"
         )}`,
+        authToken,
         {
           method: "DELETE",
-          headers: { Authorization: `Bearer ${authToken}` },
         }
       );
 
@@ -1290,816 +1278,48 @@ export default function SettingsPage() {
         </section>
       )}
 
-      {/* =====================================================================
-          MODALS: WORKFLOW TEMPLATES (CREATE / EDIT / DELETE)
-         ===================================================================== */}
+      {/* Workflow Modals (Create / Edit / Delete) */}
+      <WorkflowModals
+        createWfOpen={createWfOpen}
+        setCreateWfOpen={setCreateWfOpen}
+        editWfOpen={editWfOpen}
+        setEditWfOpen={setEditWfOpen}
+        deleteWfTarget={deleteWfTarget}
+        setDeleteWfTarget={setDeleteWfTarget}
+        wfName={wfName}
+        setWfName={setWfName}
+        wfStages={wfStages}
+        handleAddStage={handleAddStage}
+        handleRemoveStage={handleRemoveStage}
+        handleStageChange={handleStageChange}
+        activeContacts={activeContacts}
+        isSubmittingWf={isSubmittingWf}
+        handleCreateWorkflow={handleCreateWorkflow}
+        handleEditWorkflow={handleEditWorkflow}
+        handleDeleteWorkflow={handleDeleteWorkflow}
+      />
 
-      {/* CREATE WORKFLOW TEMPLATE MODAL */}
-      <ModalDialog
-        isOpen={createWfOpen}
-        onClose={() => !isSubmittingWf && setCreateWfOpen(false)}
-        title="Create Workflow Template"
-        description="Configure sequential approval stages with designated primary officers and reminder rules."
-        maxWidth="620px"
-      >
-        <form onSubmit={handleCreateWorkflow} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600 }}>
-            <span>Template Name</span>
-            <input
-              type="text"
-              required
-              placeholder="e.g. Standard 2-Stage Approval, Executive CapEx Review"
-              value={wfName}
-              onChange={(e) => setWfName(e.target.value)}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--border-light)",
-                fontSize: 13,
-              }}
-            />
-          </label>
-
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)" }}>
-              Sequential Approval Stages
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              leftIcon={<Plus size={13} />}
-              onClick={handleAddStage}
-            >
-              Add Stage
-            </Button>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: "360px", overflowY: "auto", paddingRight: 4 }}>
-            {wfStages.map((stage, idx) => (
-              <div
-                key={idx}
-                style={{
-                  background: "var(--bg-subtle)",
-                  border: "1px solid var(--border-light)",
-                  borderRadius: "var(--radius-md)",
-                  padding: "14px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 10,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <Badge variant="info">Stage #{idx + 1}</Badge>
-                  {wfStages.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveStage(idx)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        color: "var(--urgency-rose)",
-                        fontSize: 12,
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                      }}
-                    >
-                      <Trash2 size={12} />
-                      <span>Remove</span>
-                    </button>
-                  )}
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, fontWeight: 600 }}>
-                    <span>Primary Approver *</span>
-                    <select
-                      required
-                      value={stage.contactId}
-                      onChange={(e) => handleStageChange(idx, "contactId", e.target.value)}
-                      style={{
-                        padding: "7px 10px",
-                        borderRadius: "var(--radius-md)",
-                        border: "1px solid var(--border-light)",
-                        fontSize: 12.5,
-                        background: "var(--bg-surface)",
-                      }}
-                    >
-                      <option value="">Select contact...</option>
-                      {activeContacts.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.email})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, fontWeight: 600 }}>
-                    <span>Backup Approver</span>
-                    <select
-                      value={stage.backupContactId}
-                      onChange={(e) => handleStageChange(idx, "backupContactId", e.target.value)}
-                      style={{
-                        padding: "7px 10px",
-                        borderRadius: "var(--radius-md)",
-                        border: "1px solid var(--border-light)",
-                        fontSize: 12.5,
-                        background: "var(--bg-surface)",
-                      }}
-                    >
-                      <option value="">None (Optional)</option>
-                      {activeContacts
-                        .filter((c) => c.id !== stage.contactId)
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name} ({c.email})
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, fontWeight: 600 }}>
-                    <span>Reminder Interval (Hours)</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={720}
-                      value={stage.reminderIntervalHours}
-                      onChange={(e) =>
-                        handleStageChange(idx, "reminderIntervalHours", Number(e.target.value))
-                      }
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "var(--radius-md)",
-                        border: "1px solid var(--border-light)",
-                        fontSize: 12.5,
-                        background: "var(--bg-surface)",
-                      }}
-                    />
-                  </label>
-
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, fontWeight: 600 }}>
-                    <span>Max Reminders</span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={20}
-                      value={stage.maxReminders}
-                      onChange={(e) =>
-                        handleStageChange(idx, "maxReminders", Number(e.target.value))
-                      }
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "var(--radius-md)",
-                        border: "1px solid var(--border-light)",
-                        fontSize: 12.5,
-                        background: "var(--bg-surface)",
-                      }}
-                    />
-                  </label>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 12 }}>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isSubmittingWf}
-              onClick={() => setCreateWfOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" isLoading={isSubmittingWf}>
-              Save Workflow Template
-            </Button>
-          </div>
-        </form>
-      </ModalDialog>
-
-      {/* EDIT WORKFLOW TEMPLATE MODAL */}
-      <ModalDialog
-        isOpen={editWfOpen}
-        onClose={() => !isSubmittingWf && setEditWfOpen(false)}
-        title="Edit Workflow Template"
-        description="Update stage sequence, approvers, and automated dispatch intervals."
-        maxWidth="620px"
-      >
-        <form onSubmit={handleEditWorkflow} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600 }}>
-            <span>Template Name</span>
-            <input
-              type="text"
-              required
-              value={wfName}
-              onChange={(e) => setWfName(e.target.value)}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--border-light)",
-                fontSize: 13,
-              }}
-            />
-          </label>
-
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)" }}>
-              Sequential Approval Stages
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              leftIcon={<Plus size={13} />}
-              onClick={handleAddStage}
-            >
-              Add Stage
-            </Button>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: "360px", overflowY: "auto", paddingRight: 4 }}>
-            {wfStages.map((stage, idx) => (
-              <div
-                key={idx}
-                style={{
-                  background: "var(--bg-subtle)",
-                  border: "1px solid var(--border-light)",
-                  borderRadius: "var(--radius-md)",
-                  padding: "14px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 10,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <Badge variant="info">Stage #{idx + 1}</Badge>
-                  {wfStages.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveStage(idx)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        color: "var(--urgency-rose)",
-                        fontSize: 12,
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                      }}
-                    >
-                      <Trash2 size={12} />
-                      <span>Remove</span>
-                    </button>
-                  )}
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, fontWeight: 600 }}>
-                    <span>Primary Approver *</span>
-                    <select
-                      required
-                      value={stage.contactId}
-                      onChange={(e) => handleStageChange(idx, "contactId", e.target.value)}
-                      style={{
-                        padding: "7px 10px",
-                        borderRadius: "var(--radius-md)",
-                        border: "1px solid var(--border-light)",
-                        fontSize: 12.5,
-                        background: "var(--bg-surface)",
-                      }}
-                    >
-                      <option value="">Select contact...</option>
-                      {activeContacts.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.email})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, fontWeight: 600 }}>
-                    <span>Backup Approver</span>
-                    <select
-                      value={stage.backupContactId}
-                      onChange={(e) => handleStageChange(idx, "backupContactId", e.target.value)}
-                      style={{
-                        padding: "7px 10px",
-                        borderRadius: "var(--radius-md)",
-                        border: "1px solid var(--border-light)",
-                        fontSize: 12.5,
-                        background: "var(--bg-surface)",
-                      }}
-                    >
-                      <option value="">None (Optional)</option>
-                      {activeContacts
-                        .filter((c) => c.id !== stage.contactId)
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name} ({c.email})
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, fontWeight: 600 }}>
-                    <span>Reminder Interval (Hours)</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={720}
-                      value={stage.reminderIntervalHours}
-                      onChange={(e) =>
-                        handleStageChange(idx, "reminderIntervalHours", Number(e.target.value))
-                      }
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "var(--radius-md)",
-                        border: "1px solid var(--border-light)",
-                        fontSize: 12.5,
-                        background: "var(--bg-surface)",
-                      }}
-                    />
-                  </label>
-
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, fontWeight: 600 }}>
-                    <span>Max Reminders</span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={20}
-                      value={stage.maxReminders}
-                      onChange={(e) =>
-                        handleStageChange(idx, "maxReminders", Number(e.target.value))
-                      }
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "var(--radius-md)",
-                        border: "1px solid var(--border-light)",
-                        fontSize: 12.5,
-                        background: "var(--bg-surface)",
-                      }}
-                    />
-                  </label>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 12 }}>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isSubmittingWf}
-              onClick={() => setEditWfOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" isLoading={isSubmittingWf}>
-              Save Changes
-            </Button>
-          </div>
-        </form>
-      </ModalDialog>
-
-      {/* DELETE WORKFLOW CONFIRM MODAL */}
-      <ModalDialog
-        isOpen={Boolean(deleteWfTarget)}
-        onClose={() => !isSubmittingWf && setDeleteWfTarget(null)}
-        title="Delete Workflow Template"
-        maxWidth="460px"
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <p style={{ margin: 0, fontSize: 13.5, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-            Are you sure you want to permanently delete the workflow template{" "}
-            <strong style={{ color: "var(--text-primary)" }}>&ldquo;{deleteWfTarget?.name}&rdquo;</strong>?
-            This action cannot be undone.
-          </p>
-
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isSubmittingWf}
-              onClick={() => setDeleteWfTarget(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              isLoading={isSubmittingWf}
-              onClick={() => void handleDeleteWorkflow()}
-            >
-              Delete Template
-            </Button>
-          </div>
-        </div>
-      </ModalDialog>
-
-      {/* =====================================================================
-          MODALS: CONTACTS (CREATE / EDIT / DELETE)
-         ===================================================================== */}
-
-      {/* CREATE CONTACT / ADMIN MODAL */}
-      <ModalDialog
-        isOpen={createContactOpen}
-        onClose={() => !isSubmittingContact && setCreateContactOpen(false)}
-        title={isModalForAdmin ? "Add Team Administrator" : "Add Approver Contact"}
-        description={
-          isModalForAdmin
-            ? "Register an internal team member or Team Lead with full dashboard login credentials."
-            : "Register a designated reviewer who will receive email authorization links. No password required."
-        }
-        maxWidth="480px"
-      >
-        <form onSubmit={handleCreateContact} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-            <span>Full Name *</span>
-            <input
-              type="text"
-              required
-              placeholder={isModalForAdmin ? "e.g. TL Ramesh Kumar" : "e.g. Jeslin, Christy Jenisha"}
-              value={contactDraft.name}
-              onChange={(e) => setContactDraft((curr) => ({ ...curr, name: e.target.value }))}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--border-light)",
-                fontSize: 13,
-              }}
-            />
-          </label>
-
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-            <span>Email Address *</span>
-            <input
-              type="email"
-              required
-              placeholder={isModalForAdmin ? "admin@company.com" : "approver@company.com"}
-              value={contactDraft.email}
-              onChange={(e) => setContactDraft((curr) => ({ ...curr, email: e.target.value }))}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--border-light)",
-                fontSize: 13,
-              }}
-            />
-          </label>
-
-          {isModalForAdmin ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-              <span>Access Role</span>
-              <div
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "var(--radius-md)",
-                  background: "var(--bg-subtle)",
-                  border: "1px solid var(--border-light)",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "var(--brand-primary)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <span>👑 Administrator (Full Platform Access)</span>
-              </div>
-            </div>
-          ) : (
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-              <span>Approval Level *</span>
-              <select
-                value={contactDraft.role}
-                onChange={(e) => setContactDraft((curr) => ({ ...curr, role: e.target.value }))}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border-light)",
-                  fontSize: 13,
-                  background: "var(--bg-surface)",
-                }}
-              >
-                <option value="APPROVER">👤 Primary Approver (Stage 1 Reviewer)</option>
-                <option value="BACKUP_APPROVER">🛡️ Backup Approver (Stage 2 Reviewer)</option>
-              </select>
-            </label>
-          )}
-
-          {isModalForAdmin ? (
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <KeyRound size={13} style={{ color: "var(--brand-primary)" }} />
-                  <span>Login Password *</span>
-                </span>
-                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)" }}>
-                  Min 6 characters
-                </span>
-              </div>
-              <div style={{ position: "relative" }}>
-                <input
-                  type={showCreatePassword ? "text" : "password"}
-                  required
-                  placeholder="Assign a secure login password"
-                  minLength={6}
-                  value={contactDraft.password}
-                  onChange={(e) => setContactDraft((curr) => ({ ...curr, password: e.target.value }))}
-                  style={{
-                    width: "100%",
-                    padding: "8px 36px 8px 12px",
-                    borderRadius: "var(--radius-md)",
-                    border: "1px solid var(--border-light)",
-                    fontSize: 13,
-                    background: "var(--bg-surface)",
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowCreatePassword((p) => !p)}
-                  tabIndex={-1}
-                  aria-label={showCreatePassword ? "Hide password" : "Show password"}
-                  style={{
-                    position: "absolute",
-                    right: 8,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background: "transparent",
-                    border: "none",
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                    padding: 4,
-                    display: "flex",
-                    alignItems: "center",
-                  }}
-                >
-                  {showCreatePassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                </button>
-              </div>
-            </label>
-          ) : (
-            <div
-              style={{
-                padding: "10px 12px",
-                background: "var(--bg-subtle)",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--border-light)",
-                fontSize: 12,
-                color: "var(--text-secondary)",
-                lineHeight: 1.4,
-              }}
-            >
-              💡 <strong>Passwordless Security:</strong> Approvers do not need passwords. When batches require approval, they receive a secure cryptographic 1-click link via email with OTP verification.
-            </div>
-          )}
-
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isSubmittingContact}
-              onClick={() => setCreateContactOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" isLoading={isSubmittingContact}>
-              {isModalForAdmin ? "Create Administrator" : "Add Approver"}
-            </Button>
-          </div>
-        </form>
-      </ModalDialog>
-
-      {/* EDIT CONTACT / ADMIN MODAL */}
-      <ModalDialog
-        isOpen={editContactOpen}
-        onClose={() => !isSubmittingContact && setEditContactOpen(false)}
-        title={isModalForAdmin ? "Edit Administrator" : "Edit Approver Contact"}
-        description={
-          isModalForAdmin
-            ? "Update administrator details or reset their login password."
-            : "Update approver name, email, or sequential approval role."
-        }
-        maxWidth="480px"
-      >
-        {editingContact && (
-          <form onSubmit={handleEditContact} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-              <span>Full Name *</span>
-              <input
-                type="text"
-                required
-                value={editingContact.name}
-                onChange={(e) =>
-                  setEditingContact((curr) => (curr ? { ...curr, name: e.target.value } : curr))
-                }
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border-light)",
-                  fontSize: 13,
-                }}
-              />
-            </label>
-
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-              <span>Email Address *</span>
-              <input
-                type="email"
-                required
-                value={editingContact.email}
-                onChange={(e) =>
-                  setEditingContact((curr) => (curr ? { ...curr, email: e.target.value } : curr))
-                }
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border-light)",
-                  fontSize: 13,
-                }}
-              />
-            </label>
-
-            {!isModalForAdmin && (
-              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-                <span>Approval Role *</span>
-                <select
-                  value={editingContact.role}
-                  onChange={(e) =>
-                    setEditingContact((curr) => (curr ? { ...curr, role: e.target.value } : curr))
-                  }
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: "var(--radius-md)",
-                    border: "1px solid var(--border-light)",
-                    fontSize: 13,
-                    background: "var(--bg-surface)",
-                  }}
-                >
-                  <option value="APPROVER">👤 Primary Approver (Stage 1 Reviewer)</option>
-                  <option value="BACKUP_APPROVER">🛡️ Backup Approver (Stage 2 Reviewer)</option>
-                </select>
-              </label>
-            )}
-
-            {isModalForAdmin ? (
-              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <KeyRound size={13} style={{ color: "var(--brand-primary)" }} />
-                    <span>Reset Login Password</span>
-                  </span>
-                  <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)" }}>
-                    Leave blank to keep existing password
-                  </span>
-                </div>
-                <div style={{ position: "relative" }}>
-                  <input
-                    type={showEditPassword ? "text" : "password"}
-                    placeholder="Enter new password to update (min 6 chars)"
-                    minLength={6}
-                    value={editContactPassword}
-                    onChange={(e) => setEditContactPassword(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "8px 36px 8px 12px",
-                      borderRadius: "var(--radius-md)",
-                      border: "1px solid var(--border-light)",
-                      fontSize: 13,
-                      background: "var(--bg-surface)",
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowEditPassword((p) => !p)}
-                    tabIndex={-1}
-                    aria-label={showEditPassword ? "Hide password" : "Show password"}
-                    style={{
-                      position: "absolute",
-                      right: 8,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      background: "transparent",
-                      border: "none",
-                      color: "var(--text-muted)",
-                      cursor: "pointer",
-                      padding: 4,
-                      display: "flex",
-                      alignItems: "center",
-                    }}
-                  >
-                    {showEditPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
-              </label>
-            ) : (
-              <div
-                style={{
-                  padding: "10px 12px",
-                  background: "var(--bg-subtle)",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border-light)",
-                  fontSize: 12,
-                  color: "var(--text-secondary)",
-                  lineHeight: 1.4,
-                }}
-              >
-                💡 <strong>Passwordless Approver:</strong> Approvers do not require a login password. They review and authorize bills strictly via secure, time-limited 1-click email authorization links.
-              </div>
-            )}
-
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", marginTop: 4 }}>
-              <input
-                type="checkbox"
-                checked={editingContact.isActive}
-                onChange={(e) =>
-                  setEditingContact((curr) => (curr ? { ...curr, isActive: e.target.checked } : curr))
-                }
-                style={{ width: 16, height: 16 }}
-              />
-              <span>Account is active</span>
-            </label>
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 14 }}>
-              {isAdmin && (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  disabled={isSubmittingContact}
-                  leftIcon={<Trash2 size={13} />}
-                  onClick={() => {
-                    const target = editingContact;
-                    setEditContactOpen(false);
-                    setDeleteContactTarget(target);
-                  }}
-                >
-                  Delete {isModalForAdmin ? "Administrator" : "Approver"}
-                </Button>
-              )}
-
-              <div style={{ display: "flex", gap: 10, marginLeft: "auto" }}>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={isSubmittingContact}
-                  onClick={() => setEditContactOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" variant="primary" isLoading={isSubmittingContact}>
-                  Save Changes
-                </Button>
-              </div>
-            </div>
-          </form>
-        )}
-      </ModalDialog>
-
-      {/* DELETE CONTACT CONFIRM MODAL */}
-      <ModalDialog
-        isOpen={Boolean(deleteContactTarget)}
-        onClose={() => !isSubmittingContact && setDeleteContactTarget(null)}
-        title={deleteContactTarget?.role === "ADMIN" ? "Delete Administrator" : "Delete Approver Contact"}
-        maxWidth="460px"
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <p style={{ margin: 0, fontSize: 13.5, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-            Are you sure you want to permanently delete the {deleteContactTarget?.role === "ADMIN" ? "administrator" : "approver contact"}{" "}
-            <strong style={{ color: "var(--text-primary)" }}>
-              {deleteContactTarget?.name} ({deleteContactTarget?.email})
-            </strong>
-            ? This action cannot be undone.
-          </p>
-
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isSubmittingContact}
-              onClick={() => setDeleteContactTarget(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              isLoading={isSubmittingContact}
-              onClick={() => void handleDeleteContact()}
-            >
-              {deleteContactTarget?.role === "ADMIN" ? "Delete Administrator" : "Delete Approver"}
-            </Button>
-          </div>
-        </div>
-      </ModalDialog>
+      {/* Contact Modals (Create / Edit / Delete) */}
+      <ContactModals
+        createContactOpen={createContactOpen}
+        setCreateContactOpen={setCreateContactOpen}
+        editContactOpen={editContactOpen}
+        setEditContactOpen={setEditContactOpen}
+        deleteContactTarget={deleteContactTarget}
+        setDeleteContactTarget={setDeleteContactTarget}
+        editingContact={editingContact}
+        setEditingContact={setEditingContact}
+        contactDraft={contactDraft}
+        setContactDraft={setContactDraft}
+        isModalForAdmin={isModalForAdmin}
+        isAdmin={isAdmin}
+        editContactPassword={editContactPassword}
+        setEditContactPassword={setEditContactPassword}
+        isSubmittingContact={isSubmittingContact}
+        handleCreateContact={handleCreateContact}
+        handleEditContact={handleEditContact}
+        handleDeleteContact={handleDeleteContact}
+      />
     </div>
   );
 }

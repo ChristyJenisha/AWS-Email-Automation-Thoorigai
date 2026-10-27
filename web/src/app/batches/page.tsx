@@ -49,6 +49,13 @@ import {
 } from "../../components/ui";
 import { authFetch, getApiBase } from "../../lib/api";
 import { BatchRecord, ContactRecord, BatchHistoryRecord } from "../../types";
+import {
+  BatchConfirmModal,
+  BatchReassignModal,
+  BatchDeleteModal,
+  BatchDetailsSheet,
+  BatchCreateModal,
+} from "../../components/batches";
 
 type BatchStatusFilter = "ALL" | "IN_PROGRESS" | "READY_FOR_PAYMENT" | "COMPLETED";
 type SortField = "date" | "amount" | "bills" | "status" | "id";
@@ -1132,562 +1139,63 @@ function BatchesContent() {
       </AIGradientBorder>
 
       {/* Slide-Over Audit Sheet */}
-      <SlideOverSheet
-        isOpen={Boolean(selectedBatchId)}
+      <BatchDetailsSheet
+        selectedBatchId={selectedBatchId}
         onClose={() => {
           setSelectedBatchId(null);
           setBatchHistory(null);
         }}
-        title={`Audit Trail: Batch ${formatBatchId(selectedBatchId)}`}
-        description="Complete chronological record of dispatches, approver sign-offs, and reminders."
-        width="540px"
-      >
-        {isLoadingHistory ? (
-          <div style={{ padding: "40px 0", textAlign: "center", color: "var(--text-muted)" }}>
-            <Clock size={24} className="rotating" style={{ margin: "0 auto 10px", display: "block" }} />
-            <span>Loading audit history records...</span>
-          </div>
-        ) : batchHistory ? (
-          <div style={{ display: "grid", gap: 20 }}>
-            {/* Overview Card */}
-            <div
-              style={{
-                padding: 14,
-                background: "var(--bg-subtle)",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--border-light)",
-                fontSize: 12,
-                display: "grid",
-                gap: 6,
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>Status:</span>
-                <strong>{batchHistory.status}</strong>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>Template:</span>
-                <strong>{batchHistory.template?.name || "Standard Workflow"}</strong>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>Total Invoices:</span>
-                <strong>{batchHistory.bills?.length ?? 0} bills</strong>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>Total Amount:</span>
-                <strong>
-                  {formatCurrency((batchHistory.bills ?? []).reduce((sum, b) => sum + Number(b.amount ?? 0), 0))}
-                </strong>
-              </div>
-            </div>
-
-            {/* Stages Progression */}
-            <div>
-              <strong style={{ fontSize: 13, display: "block", marginBottom: 10 }}>Workflow Progression</strong>
-              <div style={{ display: "grid", gap: 8 }}>
-                {batchHistory.stepInstances?.map((stg) => (
-                  <div
-                    key={stg.id}
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: "var(--radius-md)",
-                      border: "1px solid var(--border-light)",
-                      background: "var(--bg-surface)",
-                      fontSize: 12,
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <strong>
-                        Stage {stg.stage?.order}: {stg.stage?.contact?.name}
-                      </strong>
-                      <Badge variant={stg.status === "COMPLETED" ? "success" : stg.status === "ALERTED" ? "warning" : "neutral"}>
-                        {stg.status}
-                      </Badge>
-                    </div>
-                    <div style={{ color: "var(--text-muted)", fontSize: 11 }}>
-                      {stg.stage?.contact?.email} · Reminders sent: {stg.reminderCount ?? 0}
-                    </div>
-                    {stg.lastComment && (
-                      <div
-                        style={{
-                          marginTop: 6,
-                          padding: "6px 8px",
-                          background: "var(--bg-subtle)",
-                          borderRadius: "var(--radius-sm)",
-                          fontSize: 11,
-                          color: "var(--text-secondary)",
-                          fontStyle: "italic",
-                        }}
-                      >
-                        Note: {stg.lastComment}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Audit Logs */}
-            <div>
-              <strong style={{ fontSize: 13, display: "block", marginBottom: 10 }}>Audit Activity Logs</strong>
-              {(batchHistory.auditLogs ?? []).length === 0 ? (
-                <p style={{ fontSize: 12, color: "var(--text-muted)" }}>No audit events logged yet.</p>
-              ) : (
-                <div style={{ display: "grid", gap: 8 }}>
-                  {batchHistory.auditLogs?.map((log) => (
-                    <div
-                      key={log.id}
-                      style={{
-                        padding: "8px 12px",
-                        borderLeft: "3px solid var(--brand-primary)",
-                        background: "var(--bg-subtle)",
-                        borderRadius: "0 var(--radius-sm) var(--radius-sm) 0",
-                        fontSize: 11,
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                        <strong style={{ textTransform: "capitalize", color: "var(--text-primary)" }}>
-                          {log.action.replace(/_/g, " ")}
-                        </strong>
-                        <span style={{ color: "var(--text-muted)" }}>
-                          {new Intl.DateTimeFormat("en-IN", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          }).format(new Date(log.createdAt))}
-                        </span>
-                      </div>
-                      <div style={{ color: "var(--text-secondary)" }}>
-                        Actor: {log.actor || "System / Offline"}
-                      </div>
-                      {log.detail && (
-                        <div style={{ color: "var(--text-muted)", marginTop: 2, fontFamily: "monospace", fontSize: 10 }}>
-                          {JSON.stringify(log.detail)}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Deep Link to Standalone Batch Page */}
-            <div style={{ marginTop: 10, paddingTop: 14, borderTop: "1px solid var(--border-light)" }}>
-              <Link
-                href={`/batches/${batchHistory.id}`}
-                className="ui-button ui-button--secondary ui-button--md"
-                style={{ width: "100%", justifyContent: "center" }}
-              >
-                <span>Open Full Standalone Page</span>
-                <ExternalLink size={14} />
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <p style={{ color: "var(--urgency-rose)", textAlign: "center" }}>Unable to load batch audit trail.</p>
-        )}
-      </SlideOverSheet>
+        isLoadingHistory={isLoadingHistory}
+        batchHistory={batchHistory}
+      />
 
       {/* Confirm on Behalf Modal */}
-      {confirmModalTarget && (
-        <ModalDialog
-          isOpen={Boolean(confirmModalTarget)}
-          onClose={() => setConfirmModalTarget(null)}
-          title="Confirm on Behalf of Approver"
-          description="Advance this batch to the next approval stage with an authorized audit note."
-        >
-          <div style={{ display: "grid", gap: 14 }}>
-            <div
-              style={{
-                padding: "10px 14px",
-                background: "var(--bg-subtle)",
-                borderRadius: "var(--radius-md)",
-                fontSize: 12,
-              }}
-            >
-              <div>
-                <strong>Batch:</strong> {formatBatchId(confirmModalTarget.batch.id)}
-              </div>
-              <div>
-                <strong>Current Approver:</strong>{" "}
-                {confirmModalTarget.step.stage?.contact?.name ?? "Assigned Approver"} (
-                {confirmModalTarget.step.stage?.contact?.email})
-              </div>
-            </div>
-
-            <div>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  marginBottom: 6,
-                  color: "var(--text-primary)",
-                }}
-              >
-                Offline Authorization Note <span style={{ color: "var(--urgency-rose)" }}>*</span>
-              </label>
-              <textarea
-                rows={3}
-                placeholder="e.g. Verbal sign-off received via phone call with Director Rajesh at 11:30 AM..."
-                value={confirmNote}
-                onChange={(e) => setConfirmNote(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "8px 10px",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border-strong)",
-                  fontSize: 13,
-                  fontFamily: "inherit",
-                }}
-              />
-              <small
-                style={{
-                  color: confirmNote.trim().length >= 10 ? "var(--brand-primary)" : "var(--text-muted)",
-                  fontSize: 11,
-                }}
-              >
-                {confirmNote.trim().length}/10 characters minimum
-              </small>
-            </div>
-
-            {confirmError && (
-              <div
-                style={{
-                  padding: "8px 12px",
-                  background: "var(--urgency-rose-bg)",
-                  color: "var(--urgency-rose)",
-                  borderRadius: "var(--radius-sm)",
-                  fontSize: 12,
-                }}
-              >
-                {confirmError}
-              </div>
-            )}
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
-              <Button variant="secondary" onClick={() => setConfirmModalTarget(null)} disabled={isSubmittingConfirm}>
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => void handleConfirmOnBehalf()}
-                disabled={!isValidConfirmNote(confirmNote) || isSubmittingConfirm}
-                isLoading={isSubmittingConfirm}
-              >
-                Confirm Authorization
-              </Button>
-            </div>
-          </div>
-        </ModalDialog>
-      )}
+      <BatchConfirmModal
+        target={confirmModalTarget}
+        onClose={() => setConfirmModalTarget(null)}
+        confirmNote={confirmNote}
+        setConfirmNote={setConfirmNote}
+        confirmError={confirmError}
+        isSubmitting={isSubmittingConfirm}
+        onConfirm={handleConfirmOnBehalf}
+      />
 
       {/* Reassign Step Modal */}
-      {reassignModalTarget && (
-        <ModalDialog
-          isOpen={Boolean(reassignModalTarget)}
-          onClose={() => setReassignModalTarget(null)}
-          title="Reassign Approval Step"
-          description="Transfer responsibility for this stage to another active organizational contact."
-        >
-          <div style={{ display: "grid", gap: 14 }}>
-            <div>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                New Approver <span style={{ color: "var(--urgency-rose)" }}>*</span>
-              </label>
-              <select
-                value={reassignContactId}
-                onChange={(e) => setReassignContactId(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "8px 10px",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border-strong)",
-                  fontSize: 13,
-                }}
-              >
-                <option value="">Select an active contact...</option>
-                {contacts
-                  .filter((c) => c.isActive && c.id !== reassignModalTarget.step.stage?.contact?.id)
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.email}) - {c.role}
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                Reason for Reassignment (Optional)
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Primary approver on medical leave"
-                value={reassignReason}
-                onChange={(e) => setReassignReason(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "8px 10px",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border-strong)",
-                  fontSize: 13,
-                }}
-              />
-            </div>
-
-            {reassignError && (
-              <div
-                style={{
-                  padding: "8px 12px",
-                  background: "var(--urgency-rose-bg)",
-                  color: "var(--urgency-rose)",
-                  borderRadius: "var(--radius-sm)",
-                  fontSize: 12,
-                }}
-              >
-                {reassignError}
-              </div>
-            )}
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
-              <Button variant="secondary" onClick={() => setReassignModalTarget(null)} disabled={isSubmittingReassign}>
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => void handleReassign()}
-                disabled={!reassignContactId || isSubmittingReassign}
-                isLoading={isSubmittingReassign}
-              >
-                Reassign Step
-              </Button>
-            </div>
-          </div>
-        </ModalDialog>
-      )}
+      <BatchReassignModal
+        target={reassignModalTarget}
+        onClose={() => setReassignModalTarget(null)}
+        contacts={contacts}
+        reassignContactId={reassignContactId}
+        setReassignContactId={setReassignContactId}
+        reassignReason={reassignReason}
+        setReassignReason={setReassignReason}
+        reassignError={reassignError}
+        isSubmitting={isSubmittingReassign}
+        onReassign={handleReassign}
+      />
 
       {/* Delete Batch Modal */}
-      {deleteModalTarget && (
-        <ModalDialog
-          isOpen={Boolean(deleteModalTarget)}
-          onClose={() => setDeleteModalTarget(null)}
-          title="Delete Batch"
-          description="Are you sure you want to permanently delete this approval batch and its associated invoices?"
-        >
-          <div style={{ display: "grid", gap: 14 }}>
-            <div
-              style={{
-                padding: "12px",
-                background: "var(--urgency-rose-bg)",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--urgency-rose-border)",
-                fontSize: 13,
-                color: "var(--urgency-rose)",
-              }}
-            >
-              <p style={{ margin: 0, fontWeight: 600 }}>This action cannot be undone.</p>
-              <p style={{ margin: "4px 0 0", fontSize: 12 }}>
-                Batch {formatBatchId(deleteModalTarget.id)} with {(deleteModalTarget.bills ?? []).length} invoices will be removed.
-              </p>
-            </div>
-
-            {deleteError && (
-              <div
-                style={{
-                  padding: "8px 12px",
-                  background: "var(--urgency-rose-bg)",
-                  color: "var(--urgency-rose)",
-                  borderRadius: "var(--radius-sm)",
-                  fontSize: 12,
-                }}
-              >
-                {deleteError}
-              </div>
-            )}
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
-              <Button variant="secondary" onClick={() => setDeleteModalTarget(null)} disabled={isSubmittingDelete}>
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => void handleDeleteBatch()}
-                isLoading={isSubmittingDelete}
-              >
-                Delete Permanently
-              </Button>
-            </div>
-          </div>
-        </ModalDialog>
-      )}
+      <BatchDeleteModal
+        target={deleteModalTarget}
+        onClose={() => setDeleteModalTarget(null)}
+        deleteError={deleteError}
+        isSubmitting={isSubmittingDelete}
+        onDelete={handleDeleteBatch}
+      />
 
       {/* Create Batch Modal */}
-      {isCreateModalOpen && (
-        <ModalDialog
-          isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
-          title="Create New Approval Batch"
-          description="Bundle vendor or customer bills into an automated multi-stage sign-off batch."
-        >
-          <div style={{ display: "grid", gap: 16 }}>
-            {/* Workflow Template */}
-            <div>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                Approval Workflow Template <span style={{ color: "var(--urgency-rose)" }}>*</span>
-              </label>
-              <select
-                value={createTemplateId || workflows[0]?.id || ""}
-                onChange={(e) => setCreateTemplateId(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "8px 10px",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border-strong)",
-                  fontSize: 13,
-                }}
-              >
-                {workflows.map((wf) => (
-                  <option key={wf.id} value={wf.id}>
-                    {wf.name} ({wf.stages?.length ?? 1} stage{(wf.stages?.length ?? 1) > 1 ? "s" : ""})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Invoices List */}
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, margin: 0 }}>
-                  Invoices / Bills in Batch <span style={{ color: "var(--urgency-rose)" }}>*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCreateBills((prev) => [
-                      ...prev,
-                      { billNumber: "", amount: 0, dueDate: new Date().toISOString().slice(0, 10) },
-                    ])
-                  }
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "var(--brand-primary)",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
-                >
-                  <Plus size={12} />
-                  <span>Add Invoice</span>
-                </button>
-              </div>
-
-              <div style={{ display: "grid", gap: 8, maxHeight: 220, overflowY: "auto" }}>
-                {createBills.map((bill, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 120px 130px 30px",
-                      gap: 8,
-                      alignItems: "center",
-                    }}
-                  >
-                    <input
-                      type="text"
-                      placeholder="Invoice # (e.g. INV-2026-01)"
-                      value={bill.billNumber}
-                      onChange={(e) => {
-                        const updated = [...createBills];
-                        updated[idx].billNumber = e.target.value;
-                        setCreateBills(updated);
-                      }}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "var(--radius-md)",
-                        border: "1px solid var(--border-strong)",
-                        fontSize: 12,
-                      }}
-                    />
-                    <input
-                      type="number"
-                      placeholder="Amount (₹)"
-                      value={bill.amount || ""}
-                      onChange={(e) => {
-                        const updated = [...createBills];
-                        updated[idx].amount = Number(e.target.value);
-                        setCreateBills(updated);
-                      }}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "var(--radius-md)",
-                        border: "1px solid var(--border-strong)",
-                        fontSize: 12,
-                      }}
-                    />
-                    <input
-                      type="date"
-                      value={bill.dueDate}
-                      onChange={(e) => {
-                        const updated = [...createBills];
-                        updated[idx].dueDate = e.target.value;
-                        setCreateBills(updated);
-                      }}
-                      style={{
-                        padding: "6px 8px",
-                        borderRadius: "var(--radius-md)",
-                        border: "1px solid var(--border-strong)",
-                        fontSize: 12,
-                      }}
-                    />
-                    {createBills.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setCreateBills((prev) => prev.filter((_, i) => i !== idx))}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: "var(--urgency-rose)",
-                          cursor: "pointer",
-                          padding: 4,
-                        }}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {createBatchError && (
-              <div
-                style={{
-                  padding: "8px 12px",
-                  background: "var(--urgency-rose-bg)",
-                  color: "var(--urgency-rose)",
-                  borderRadius: "var(--radius-sm)",
-                  fontSize: 12,
-                }}
-              >
-                {createBatchError}
-              </div>
-            )}
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
-              <Button variant="secondary" onClick={() => setIsCreateModalOpen(false)} disabled={isSubmittingCreate}>
-                Cancel
-              </Button>
-              <Button variant="primary" onClick={() => void handleCreateBatch()} isLoading={isSubmittingCreate}>
-                Launch Batch
-              </Button>
-            </div>
-          </div>
-        </ModalDialog>
-      )}
+      <BatchCreateModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        workflows={workflows}
+        createTemplateId={createTemplateId}
+        setCreateTemplateId={setCreateTemplateId}
+        createBills={createBills}
+        setCreateBills={setCreateBills}
+        createBatchError={createBatchError}
+        isSubmitting={isSubmittingCreate}
+        onCreateBatch={handleCreateBatch}
+      />
     </div>
   );
 }

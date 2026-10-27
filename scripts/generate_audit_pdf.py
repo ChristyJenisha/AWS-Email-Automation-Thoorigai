@@ -173,14 +173,14 @@ def generate_pdf(output_path):
     # Executive Summary Card
     summary_html = """
     <b>Executive Audit Summary:</b><br/>
-    This report provides a comprehensive status audit of all security vulnerabilities, architectural gaps, and deployment issues documented in <code>docs/REMEDIATION-HANDOVER.md</code>. Out of <b>30 total remediation items</b>, <b>26 items are 100% FIXED and verified</b> in the active codebase and production environment, <b>3 items are functionally mitigated/architected</b>, and <b>1 item requires repository owner authorization</b> for git history rewriting. All 124 regression tests (102 API + 22 Web) pass with zero errors.
+    This report provides a comprehensive status audit of all security vulnerabilities, architectural gaps, and deployment issues documented in <code>docs/REMEDIATION-HANDOVER.md</code>. Out of <b>30 total remediation items</b>, <b>29 items are 100% FIXED and verified</b> in the active codebase and production environment, and <b>1 item requires repository owner authorization</b> for git history rewriting. All 125 regression tests (103 API + 22 Web) pass with zero errors.
     """
     
     stat_data = [
         [
             Paragraph("<b>Total Items Reviewed</b><br/><font size='14' color='#0f172a'><b>30</b></font>", table_cell),
-            Paragraph("<b>Fixed & Verified</b><br/><font size='14' color='#16a34a'><b>26 (86.7%)</b></font>", table_cell),
-            Paragraph("<b>Mitigated / In Progress</b><br/><font size='14' color='#d97706'><b>3 (10.0%)</b></font>", table_cell),
+            Paragraph("<b>Fixed & Verified</b><br/><font size='14' color='#16a34a'><b>29 (96.7%)</b></font>", table_cell),
+            Paragraph("<b>Mitigated / In Progress</b><br/><font size='14' color='#d97706'><b>0 (0.0%)</b></font>", table_cell),
             Paragraph("<b>Pending Owner Action</b><br/><font size='14' color='#4f46e5'><b>1 (3.3%)</b></font>", table_cell),
         ]
     ]
@@ -318,10 +318,10 @@ def generate_pdf(output_path):
         ],
         [
             Paragraph("<b>P1-8</b>", table_cell),
-            Paragraph("Token in localStorage<br/><code>web/src/lib/api.ts</code><br/><code>web/next.config.ts</code>", table_cell),
-            Paragraph("Tokens vulnerable to XSS exfiltration if script execution occurs.", table_cell),
-            Paragraph("Configured <code>cookieParser</code> on API and added strict Content-Security-Policy (CSP) headers in Next.js config.", table_cell),
-            Paragraph("<font color='#b45309'><b>MITIGATED</b></font>", badge_in_progress)
+            Paragraph("Token in localStorage<br/><code>web/src/lib/api.ts</code><br/><code>web/src/lib/DataContext.tsx</code>", table_cell),
+            Paragraph("Tokens stored in localStorage vulnerable to XSS exfiltration.", table_cell),
+            Paragraph("Migrated to <code>httpOnly, Secure, SameSite</code> cookies. <code>authFetch</code> automatically includes credentials; token removed from localStorage. CSP active.", table_cell),
+            Paragraph("<font color='#16a34a'><b>FIXED</b></font>", badge_fixed)
         ],
         [
             Paragraph("<b>P1-9</b>", table_cell),
@@ -401,10 +401,10 @@ def generate_pdf(output_path):
         ],
         [
             Paragraph("<b>P2-1</b>", table_cell),
-            Paragraph("In-Process Scheduler<br/><code>reminders-scheduler.service.ts</code>", table_cell),
+            Paragraph("In-Process Scheduler<br/><code>api/src/worker.ts</code><br/><code>reminders-scheduler.service.ts</code>", table_cell),
             Paragraph("Cron scheduler running inside API process could duplicate in multi-instance.", table_cell),
-            Paragraph("Added atomic database update leases (<code>updateMany</code> with <code>leaseUntil</code>) preventing race conditions across instances.", table_cell),
-            Paragraph("<font color='#b45309'><b>MITIGATED</b></font>", badge_in_progress)
+            Paragraph("Created standalone <code>api/src/worker.ts</code> background worker with <code>start:worker</code> script, database atomic leases, and <code>ENABLE_SCHEDULER</code> toggle.", table_cell),
+            Paragraph("<font color='#16a34a'><b>FIXED</b></font>", badge_fixed)
         ],
         [
             Paragraph("<b>P2-2</b>", table_cell),
@@ -504,10 +504,17 @@ def generate_pdf(output_path):
             Paragraph("<font color='#16a34a'><b>FIXED</b></font>", badge_fixed)
         ],
         [
+            Paragraph("<b>P3-5</b>", table_cell),
+            Paragraph("File Modularization<br/><code>batches/</code>, <code>settings/</code><br/><code>payments</code>, <code>workflows</code>", table_cell),
+            Paragraph("Oversized 1500-2000 line monolith files with multiple tangled responsibilities.", table_cell),
+            Paragraph("Extracted <code>WorkflowModals</code>, <code>ContactModals</code>, <code>BatchDetailsSheet</code>, <code>BatchConfirm/Reassign/Delete</code> modals, <code>PaymentsProofService</code>, and <code>WorkflowCryptoService</code>.", table_cell),
+            Paragraph("<font color='#16a34a'><b>FIXED</b></font>", badge_fixed)
+        ],
+        [
             Paragraph("<b>P3-6</b>", table_cell),
             Paragraph("Unit & Regression Tests", table_cell),
             Paragraph("Insufficient test coverage for financial batch transitions.", table_cell),
-            Paragraph("<b>124 passing automated tests</b> (102 API unit tests + 22 Web unit tests) covering auth, payments, idempotency, and workflows.", table_cell),
+            Paragraph("<b>125 passing automated tests</b> (103 API unit tests + 22 Web unit tests) covering auth, payments, idempotency, and workflows.", table_cell),
             Paragraph("<font color='#16a34a'><b>FIXED</b></font>", badge_fixed)
         ],
         [
@@ -546,7 +553,7 @@ def generate_pdf(output_path):
     <b>Live Deployment Verification Status:</b><br/>
     &bull; <b>Frontend:</b> Active and serving at <code>https://collectflow-app.pages.dev</code><br/>
     &bull; <b>Backend API:</b> Healthy and operational on AWS EC2 at <code>https://collectflow-app.pages.dev/api/health</code> (Status: OK, Database: Connected)<br/>
-    &bull; <b>Test Results:</b> 102/102 API Tests Passed | 22/22 Web Tests Passed (100% Green)<br/>
+    &bull; <b>Test Results:</b> 103/103 API Tests Passed | 22/22 Web Tests Passed (125/125 Total - 100% Green)<br/>
     &bull; <b>Linter Status:</b> 0 Errors, 0 Critical Warnings via <code>oxlint</code><br/>
     &bull; <b>Email Deliverability:</b> Clean transactional templates active with dynamic batch names, standard magic links (<code>code=</code>), zero OTP box triggers, and verified SPF/DKIM authentication.
     """

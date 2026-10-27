@@ -4,12 +4,13 @@ import { EmailModule } from '../email/email.module.js';
 import { ApprovalsController } from './approvals.controller.js';
 import { WorkflowsController } from './workflows.controller.js';
 import { WorkflowsService } from './workflows.service.js';
+import { WorkflowCryptoService } from './workflow-crypto.service.js';
 import { WorkflowTransitionsService } from './workflow-transitions.service.js';
 
 @Module({
   imports: [AuthModule, EmailModule],
   controllers: [WorkflowsController, ApprovalsController],
-  providers: [WorkflowsService, WorkflowTransitionsService],
-  exports: [WorkflowTransitionsService],
+  providers: [WorkflowsService, WorkflowTransitionsService, WorkflowCryptoService],
+  exports: [WorkflowTransitionsService, WorkflowCryptoService],
 })
 export class WorkflowsModule {}

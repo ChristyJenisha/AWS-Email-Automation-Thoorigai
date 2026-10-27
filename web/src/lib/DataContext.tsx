@@ -54,8 +54,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (result && isMountedRef.current) {
         setAuthToken(result.token);
         setCurrentUser(result.user);
-        window.localStorage.setItem("thoorigai-token", result.token);
-        window.localStorage.setItem("thoorigai-user", JSON.stringify(result.user));
         return true;
       }
       throw new Error("Invalid credentials or server unavailable");
@@ -82,11 +80,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Initialize Auth from httpOnly cookie or fallback to localStorage
+  // Initialize Auth from httpOnly cookie
   useEffect(() => {
     isMountedRef.current = true;
     const initAuth = async () => {
-      // 1. First check if a valid httpOnly cookie session exists on the server
+      // 1. Check if a valid httpOnly cookie session exists on the server
       try {
         const meUser = await getMeApi();
         if (meUser && isMountedRef.current) {
@@ -95,26 +93,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           return;
         }
       } catch {
-        // Fall back to saved local session if offline or unauthenticated
+        // Offline or unauthenticated
       }
 
-      // 2. Fall back to saved local token if present
-      const savedToken = typeof window !== "undefined" ? window.localStorage.getItem("thoorigai-token") : null;
-      const savedUser = typeof window !== "undefined" ? window.localStorage.getItem("thoorigai-user") : null;
-
-      if (savedToken && savedUser) {
-        try {
-          const user = JSON.parse(savedUser) as AppUser;
-          setAuthToken(savedToken);
-          setCurrentUser(user);
-          setIsLoading(false);
-          return;
-        } catch {
-          // ignore corrupted local storage
-        }
-      }
-
-      // No saved session found; finish loading so SignInView can be presented
+      // No active session found; finish loading so SignInView can be presented
       if (isMountedRef.current) {
         setIsLoading(false);
       }
@@ -129,7 +111,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Fetch Dashboard Data with request sequencing
   const loadData = useCallback(async (isBackground = false) => {
     console.count("loadData");
-    if (!authToken || !currentUser) return;
+    if (!currentUser) return;
 
     const currentSeq = ++requestSeqRef.current;
 
