@@ -67,22 +67,22 @@ export class RemindersService {
       console.log('[APPROVAL_URL_DEBUG] hasToken=', approvalUrl.searchParams.has('token'), 'url=', approvalUrl.origin + approvalUrl.pathname + '?token-present');
 
       const html = buildApprovalEmailHtml({
-        headline: 'Action Required: Stage 1 Workflow Approval',
+        headline: 'Stage 1 Review Request',
         recipientName: approver.name,
-        leadMessage: 'A new bill collection batch has been initialized and is ready for your Stage 1 verification.',
+        leadMessage: 'A new batch has been prepared and is ready for your Stage 1 review.',
         batchId: step.batchId,
         stageOrder: 1,
         otpCode: initialOtpCode,
         otpExpiresMinutes: 30,
         ctaUrl: approvalUrl.toString(),
-        ctaText: 'Review & Approve Batch (Auto-Verify OTP) →',
-        subNotice: 'Click above to securely open and automatically verify your authorization. The single-use verification code is applied automatically.',
+        ctaText: 'Review Batch →',
+        subNotice: 'Click above to open the batch details. Your authorization code is applied automatically.',
       });
 
       await this.emailService.sendReminderEmail({
         to: approver.email,
         subject: `Approval required for batch ${step.batchId}`,
-        body: `A bill collection batch is ready for your review.${initialOtpCode ? ` Verification Code: ${initialOtpCode}.` : ''} Approve or return it here: ${approvalUrl.toString()}`,
+        body: `Hello ${approver.name},\n\nA batch is ready for your review.${initialOtpCode ? `\nAuthorization Code: ${initialOtpCode}` : ''}\n\nReview it here: ${approvalUrl.toString()}`,
         html,
       });
       
@@ -108,24 +108,24 @@ export class RemindersService {
           }
 
           const backupHtml = buildApprovalEmailHtml({
-            headline: 'Action Required (Backup Approver): Stage 1 Workflow Approval',
+            headline: 'Stage 1 Review Request (Backup Reviewer)',
             recipientName: step.stage.backupContact.name,
             leadMessage:
-              'A new bill collection batch has been initialized. As assigned backup approver, you can also review and authorize this batch.',
+              'A new batch has been prepared. As assigned backup reviewer, you can also review and authorize this batch.',
             batchId: step.batchId,
             stageOrder: 1,
             otpCode: initialOtpCode,
             otpExpiresMinutes: 30,
             ctaUrl: backupApprovalUrl.toString(),
-            ctaText: 'Review & Approve Batch (Auto-Verify OTP) →',
+            ctaText: 'Review Batch →',
             subNotice:
-              'Click above to securely open and automatically verify your authorization. The single-use verification code is applied automatically.',
+              'Click above to open the batch details. Your authorization code is applied automatically.',
           });
 
           await this.emailService.sendReminderEmail({
             to: step.stage.backupContact.email,
             subject: `Approval required (Backup Approver) for batch ${step.batchId}`,
-            body: `A bill collection batch is ready for your review.${initialOtpCode ? ` Verification Code: ${initialOtpCode}.` : ''} Approve or return it here: ${backupApprovalUrl.toString()}`,
+            body: `Hello ${step.stage.backupContact.name},\n\nA batch is ready for your review.${initialOtpCode ? `\nAuthorization Code: ${initialOtpCode}` : ''}\n\nReview it here: ${backupApprovalUrl.toString()}`,
             html: backupHtml,
           });
         } catch (backupErr) {

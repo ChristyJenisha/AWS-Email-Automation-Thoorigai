@@ -452,27 +452,27 @@ export class WorkflowTransitionsService {
         const totalAmount = step.batch.bills?.reduce((sum, b) => sum + Number(b.amount), 0) ?? 0;
 
         const html = buildApprovalEmailHtml({
-          headline: `Action Required: Bill Approval Reassigned to You`,
+          headline: `Stage ${step.stage.order} Review Reassigned`,
           recipientName: newContact.name,
-          leadMessage: `A bill collection batch in ${step.batch.organization.name} has been reassigned to you for authorization.${
-            normalizedReason ? ` Reason from administrator: "${normalizedReason}".` : ''
-          } Please review the bills and authorize the batch.`,
+          leadMessage: `A batch in ${step.batch.organization.name} has been reassigned to you for review.${
+            normalizedReason ? ` Note from administrator: "${normalizedReason}".` : ''
+          } Please review the details.`,
           batchId: step.batchId,
           stageOrder: step.stage.order,
           totalAmount: totalAmount > 0 ? totalAmount : undefined,
           otpCode: code,
           otpExpiresMinutes: 30,
           ctaUrl: link.url,
-          ctaText: 'Review & Authorize Batch (Auto-Verify OTP) →',
-          subNotice: 'Click above to open and automatically verify your 6-digit identity code.',
+          ctaText: 'Review Batch →',
+          subNotice: 'Click above to review the batch details.',
         });
 
         await this.emailService.sendReminderEmail({
           to: newContact.email,
-          subject: `Action Required: Bill approval reassigned to you for ${step.batch.organization.name}`,
-          body: `Hello ${newContact.name},\n\nYou have been assigned to approve Batch ${step.batch.id.slice(0, 8)} in ${step.batch.organization.name}.${
-            normalizedReason ? `\nReason: ${normalizedReason}` : ''
-          }\n\nSingle-Use Verification Code: ${code} (valid for 30 minutes)\n\nPlease review and approve the batch here:\n${link.url}`,
+          subject: `Thoorigai Ledger: Batch #${step.batch.id.slice(0, 8)} review reassigned to you`,
+          body: `Hello ${newContact.name},\n\nYou have been assigned to review Batch #${step.batch.id.slice(0, 8)} in ${step.batch.organization.name}.${
+            normalizedReason ? `\nNote: ${normalizedReason}` : ''
+          }\n\nAuthorization Code: ${code} (valid for 30 minutes)\n\nReview the batch here:\n${link.url}`,
           html,
         });
       }
@@ -627,21 +627,21 @@ export class WorkflowTransitionsService {
     const remainingMinutes = Math.ceil((expiresAt.getTime() - now.getTime()) / 60_000);
 
     const html = buildApprovalEmailHtml({
-      headline: 'Identity Verification Code',
+      headline: 'Authorization Code',
       recipientName: recipient,
-      leadMessage: 'You requested a verification code to authorize a bill collection batch.',
+      leadMessage: 'Here is your authorization code to access the batch review portal.',
       otpCode: code,
       otpExpiresMinutes: remainingMinutes,
       ctaUrl: approvalUrl,
-      ctaText: 'Open Approval Page & Auto-Verify Code →',
-      subNotice: 'Click above to automatically verify your identity and unlock approval actions, or enter the 6-digit code manually.',
+      ctaText: 'Open Batch Details →',
+      subNotice: 'Click above or enter the 6-digit code on the review page.',
     });
 
     try {
       const delivery = await this.emailService.sendReminderEmail({
         to: recipient,
-        subject: 'Your bill approval verification code',
-        body: `Your verification code is ${code}. It expires in ${remainingMinutes} minutes. Approval portal: ${approvalUrl}`,
+        subject: `Thoorigai Ledger: Authorization code ${code}`,
+        body: `Your authorization code is ${code}. It expires in ${remainingMinutes} minutes.\n\nReview portal: ${approvalUrl}`,
         html,
         sensitive: true,
       });
@@ -912,23 +912,23 @@ export class WorkflowTransitionsService {
       const totalAmount = nextStep.batch.bills?.reduce((sum, b) => sum + Number(b.amount), 0) ?? 0;
 
       const html = buildApprovalEmailHtml({
-        headline: `Action Required: Stage ${nextStep.stage.order} Approval`,
+        headline: `Stage ${nextStep.stage.order} Review Request`,
         recipientName: approver.name,
-        leadMessage: `A bill collection batch in ${nextStep.batch.organization.name} has advanced to Stage ${nextStep.stage.order} and requires your authorization.`,
+        leadMessage: `A batch in ${nextStep.batch.organization.name} has advanced to Stage ${nextStep.stage.order} and is ready for your review.`,
         batchId: nextStep.batchId,
         stageOrder: nextStep.stage.order,
         totalAmount: totalAmount > 0 ? totalAmount.toLocaleString('en-IN') : undefined,
         otpCode: code,
         otpExpiresMinutes: 30,
         ctaUrl: link.url,
-        ctaText: 'Review & Approve Batch (Auto-Verify OTP) →',
-        subNotice: 'Click above to open the batch details. Your 6-digit verification code is pre-authenticated automatically.',
+        ctaText: 'Review Batch →',
+        subNotice: 'Click above to open the batch details. Your authorization code is applied automatically.',
       });
 
       await this.emailService.sendReminderEmail({
         to: approver.email,
-        subject: `Action Required: Stage ${nextStep.stage.order} approval for batch ${nextStep.batchId.slice(0, 8)}`,
-        body: `A bill collection batch has reached Stage ${nextStep.stage.order} and requires your approval. Verification Code: ${code}. Review and approve here: ${link.url}`,
+        subject: `Thoorigai Ledger: Stage ${nextStep.stage.order} review for batch #${nextStep.batchId.slice(0, 8)}`,
+        body: `Hello ${approver.name},\n\nA batch has reached Stage ${nextStep.stage.order} and is ready for your review. Authorization Code: ${code}.\n\nReview here: ${link.url}`,
         html,
       });
     } catch (error) {
@@ -966,20 +966,20 @@ export class WorkflowTransitionsService {
       const html = buildApprovalEmailHtml({
         headline: `Batch Returned for Revision: Stage ${prevStep.stage.order}`,
         recipientName: approver.name,
-        leadMessage: `This batch was returned for correction with the note: "${comment}". Please review and update.`,
+        leadMessage: `This batch was returned for revision with note: "${comment}". Please review and update.`,
         batchId: prevStep.batchId,
         stageOrder: prevStep.stage.order,
         otpCode: code,
         otpExpiresMinutes: 30,
         ctaUrl: link.url,
-        ctaText: 'Review Returned Batch (Auto-Verify OTP) →',
-        subNotice: 'Click above to open and auto-verify your 6-digit identity code.',
+        ctaText: 'Review Batch →',
+        subNotice: 'Click above to review the returned batch.',
       });
 
       await this.emailService.sendReminderEmail({
         to: approver.email,
-        subject: `Batch ${prevStep.batchId.slice(0, 8)} returned for correction`,
-        body: `This batch was returned with note: "${comment}". Verification Code: ${code}. Review and update here: ${link.url}`,
+        subject: `Thoorigai Ledger: Batch #${prevStep.batchId.slice(0, 8)} returned for revision`,
+        body: `This batch was returned with note: "${comment}". Authorization Code: ${code}.\n\nReview and update here: ${link.url}`,
         html,
       });
     } catch (error) {
@@ -996,23 +996,23 @@ export class WorkflowTransitionsService {
       const totalAmount = bills.reduce((sum: number, b: any) => sum + Number(b.amount || 0), 0);
 
       const subject = hasNextStage
-        ? `✓ Confirmation: Stage ${stageOrder} Approval Recorded (Batch #${batchRef})`
-        : `✓ Batch #${batchRef} Fully Approved & Ready for Payment`;
+        ? `Thoorigai Ledger: Stage ${stageOrder} Approval Recorded (Batch #${batchRef})`
+        : `Thoorigai Ledger: Batch #${batchRef} Fully Approved`;
 
       const baseUrl = process.env.APPROVAL_APP_URL || 'http://localhost:3000';
       const html = buildApprovalEmailHtml({
         headline: hasNextStage
-          ? `Stage ${stageOrder} Approval Verified & Recorded`
-          : `All Approval Stages Completed!`,
+          ? `Stage ${stageOrder} Approval Recorded`
+          : `Batch Approval Completed`,
         leadMessage: hasNextStage
-          ? `Thank you. Your approval for Stage ${stageOrder} of batch #${batchRef} has been verified and recorded. The batch has advanced to the next workflow stage.`
-          : `Thank you. All workflow stages for batch #${batchRef} have been approved. The batch is now waiting in the payment queue for disbursement recording.`,
+          ? `Thank you. Your review for Stage ${stageOrder} of batch #${batchRef} has been recorded. The batch has advanced to the next workflow stage.`
+          : `Thank you. All review stages for batch #${batchRef} have been approved. The batch is now ready for payment disbursement.`,
         batchId: step.batchId,
         stageOrder,
         totalAmount: totalAmount > 0 ? totalAmount.toLocaleString('en-IN') : undefined,
         ctaUrl: hasNextStage ? undefined : `${baseUrl}/payments`,
-        ctaText: hasNextStage ? undefined : 'Open Payment Waiting Queue →',
-        subNotice: `Recorded at ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST). Your authorization was verified via single-use verification code.`,
+        ctaText: hasNextStage ? undefined : 'Open Payment Queue →',
+        subNotice: `Recorded at ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST).`,
       });
 
       await this.emailService.sendReminderEmail({
@@ -1051,15 +1051,15 @@ export class WorkflowTransitionsService {
       const baseUrl = process.env.APPROVAL_APP_URL || 'http://localhost:3000';
       const paymentsUrl = `${baseUrl}/payments`;
 
-      const subject = `🔔 Action Required: Batch #${batchRef} Fully Approved — Ready for Payment Recording`;
+      const subject = `Thoorigai Ledger: Batch #${batchRef} Ready for Payment Recording`;
       const html = buildApprovalEmailHtml({
-        headline: `Payment Recording Alert: Batch #${batchRef}`,
-        leadMessage: `All workflow verification stages have been completed for batch #${batchRef} in ${batch.organization.name}. The batch is now waiting in the payment queue for bank disbursement and UTR reference recording.`,
+        headline: `Payment Recording: Batch #${batchRef}`,
+        leadMessage: `All review stages have been completed for batch #${batchRef} in ${batch.organization.name}. The batch is now ready for payment recording.`,
         batchId: batch.id,
         totalAmount: totalAmount > 0 ? totalAmount.toLocaleString('en-IN') : undefined,
         ctaUrl: paymentsUrl,
-        ctaText: 'Record Bank Payment Now →',
-        subNotice: `Prompt payment recording updates invoice balances to PAID and finalizes the settlement audit trail.`,
+        ctaText: 'Open Payment Queue →',
+        subNotice: 'Open the payment queue to record disbursement details.',
       });
 
       // Target admin / finance recipients:

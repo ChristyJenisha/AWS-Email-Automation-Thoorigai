@@ -33,31 +33,31 @@ export type ApprovalEmailTemplateInput = {
 };
 
 export function buildApprovalEmailHtml(input: ApprovalEmailTemplateInput): string {
-  const brandName = 'Thoorigai Ledger';
+  const brandName = 'Thoorigai Infotech';
   const ctaBtn = input.ctaUrl
     ? `
-      <div style="text-align: center; margin: 28px 0 20px 0;">
-        <a href="${input.ctaUrl}" style="background-color: #0f766e; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 700; padding: 13px 28px; border-radius: 6px; display: inline-block; letter-spacing: 0.2px;">
-          ${input.ctaText || 'Review & Approve Batch →'}
+      <div style="text-align: center; margin: 24px 0 16px 0;">
+        <a href="${input.ctaUrl}" style="background-color: #0f766e; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 12px 26px; border-radius: 6px; display: inline-block;">
+          ${input.ctaText || 'Review Batch'}
         </a>
       </div>
-      <p style="font-size: 11px; color: #64748b; text-align: center; margin: 0 0 16px 0; word-break: break-all;">
-        Or open directly: <a href="${input.ctaUrl}" style="color: #0f766e;">${input.ctaUrl}</a>
+      <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0 0 12px 0;">
+        <a href="${input.ctaUrl}" style="color: #0f766e; text-decoration: underline;">Or click here to review the batch</a>
       </p>
     `
     : '';
 
   const otpBox = input.otpCode
     ? `
-      <div style="background-color: #f8fafc; border: 2px dashed #0f766e; border-radius: 8px; padding: 20px 16px; text-align: center; margin: 24px 0;">
-        <div style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px;">
-          Single-Use Verification Code
+      <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 16px; text-align: center; margin: 20px 0;">
+        <div style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">
+          Authorization Code
         </div>
-        <div style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #0f172a; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; margin: 6px 0;">
+        <div style="font-size: 28px; font-weight: 700; letter-spacing: 6px; color: #0f172a; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; margin: 4px 0;">
           ${input.otpCode}
         </div>
-        <div style="font-size: 12px; color: #64748b; margin-top: 6px;">
-          Enter this code manually on the approval page (valid for ${input.otpExpiresMinutes ?? 30} minutes)
+        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+          Valid for ${input.otpExpiresMinutes ?? 30} minutes
         </div>
       </div>
     `
@@ -88,16 +88,16 @@ export function buildApprovalEmailHtml(input: ApprovalEmailTemplateInput): strin
 </head>
 <body style="margin: 0; padding: 24px 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
   <div style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
-    <div style="background-color: #0f766e; padding: 20px 24px; text-align: left;">
-      <span style="font-size: 18px; font-weight: 800; color: #ffffff; letter-spacing: 0.5px;">${brandName}</span>
-      <span style="display: block; font-size: 12px; color: #99f6e4; margin-top: 2px;">Bill Collection &amp; Workflow Authorization</span>
+    <div style="background-color: #0f766e; padding: 18px 24px; text-align: left;">
+      <span style="font-size: 17px; font-weight: 700; color: #ffffff; letter-spacing: 0.3px;">${brandName}</span>
+      <span style="display: block; font-size: 12px; color: #99f6e4; margin-top: 2px;">Workflow Notifications</span>
     </div>
 
-    <div style="padding: 28px 24px;">
-      <h2 style="margin: 0 0 12px 0; font-size: 19px; color: #0f172a; font-weight: 700;">
+    <div style="padding: 24px 24px;">
+      <h2 style="margin: 0 0 10px 0; font-size: 18px; color: #0f172a; font-weight: 700;">
         ${input.headline}
       </h2>
-      <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #334155;">
+      <p style="margin: 0 0 14px 0; font-size: 14px; line-height: 1.6; color: #334155;">
         ${input.leadMessage}
       </p>
 
@@ -105,14 +105,13 @@ export function buildApprovalEmailHtml(input: ApprovalEmailTemplateInput): strin
       ${otpBox}
       ${ctaBtn}
 
-      ${input.subNotice ? `<p style="font-size: 12px; color: #64748b; line-height: 1.5; margin: 16px 0 0 0;">${input.subNotice}</p>` : ''}
+      ${input.subNotice ? `<p style="font-size: 12px; color: #64748b; line-height: 1.5; margin: 14px 0 0 0;">${input.subNotice}</p>` : ''}
     </div>
 
-    <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 24px; text-align: center; font-size: 11px; color: #64748b; line-height: 1.6;">
-      <strong>${brandName}</strong> &bull; Bill Collection &amp; Workflow Authorization System<br/>
-      Sent automatically on behalf of Thoorigai Infotech.<br/>
-      This is a secure transactional message regarding pending financial batch authorizations.<br/>
-      If you did not anticipate this request, please contact your accounts administrator.
+    <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 24px; text-align: center; font-size: 11px; color: #64748b; line-height: 1.6;">
+      <strong>${brandName}</strong> &bull; Workflow Notification<br/>
+      This message was sent to you as an authorized reviewer in Thoorigai Ledger.<br/>
+      If you have questions, please reach out to your administrator.
     </div>
   </div>
 </body>
@@ -138,7 +137,7 @@ export class EmailService {
     const rawPass = process.env.SMTP_PASS?.trim() || process.env.GMAIL_APP_PASSWORD?.trim();
     const smtpPass = rawPass ? rawPass.replace(/^["']|["']$/g, '').replace(/\s+/g, '') : undefined;
     const rawFrom = process.env.SMTP_FROM?.trim() || process.env.EMAIL_FROM?.trim() || smtpUser;
-    this.smtpFrom = rawFrom ? (rawFrom.includes('<') ? rawFrom : `"Thoorigai Ledger" <${rawFrom}>`) : undefined;
+    this.smtpFrom = rawFrom ? (rawFrom.includes('<') ? rawFrom : `"Thoorigai Infotech" <${rawFrom}>`) : undefined;
 
     if (smtpHost && smtpUser && smtpPass) {
       const port = Number(process.env.SMTP_PORT ?? (smtpHost === 'smtp.gmail.com' ? 587 : 587));
@@ -174,8 +173,6 @@ export class EmailService {
           </div>`,
           headers: {
             'X-Auto-Response-Suppress': 'OOF, AutoReply',
-            'X-Priority': '1',
-            'Importance': 'High',
           },
         });
         console.log(`[EMAIL_SENT_SMTP] To: ${to} (MessageId: ${info.messageId})`);
