@@ -1,11 +1,4 @@
-import {
-  AppUser,
-  BatchHistoryRecord,
-  BatchRecord,
-  ContactRecord,
-  PaymentRecord,
-  WorkflowRecord,
-} from "../types";
+import { AppUser } from "../types";
 
 export function getApiBase(): string {
   if (typeof window !== "undefined") {
@@ -23,11 +16,35 @@ export async function loginApi(
   const response = await fetch(`${apiBase}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ email, password: effectivePassword }),
   });
 
   if (!response.ok) return null;
   return (await response.json()) as { token: string; user: AppUser };
+}
+
+export async function logoutApi(): Promise<void> {
+  const apiBase = getApiBase();
+  await fetch(`${apiBase}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  }).catch(() => {});
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem("thoorigai-token");
+    window.localStorage.removeItem("thoorigai-user");
+  }
+}
+
+export async function getMeApi(): Promise<AppUser | null> {
+  const apiBase = getApiBase();
+  try {
+    const res = await authFetch(`${apiBase}/auth/me`, null);
+    if (!res.ok) return null;
+    return (await res.json()) as AppUser;
+  } catch {
+    return null;
+  }
 }
 
 export async function authFetch(
@@ -43,7 +60,7 @@ export async function authFetch(
   if (activeToken) {
     headers.set("Authorization", `Bearer ${activeToken}`);
   }
-  let response = await fetch(url, { ...init, headers });
+  let response = await fetch(url, { ...init, headers, credentials: init.credentials ?? "include" });
 
   // If unauthorized due to an expired token in demo mode, auto-refresh and retry seamlessly
   if (

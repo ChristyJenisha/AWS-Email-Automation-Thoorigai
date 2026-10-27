@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { AppUser, BatchRecord, ContactRecord, DisplayBill, WorkflowRecord } from "../types";
-import { fetchDashboardData, loginApi } from "./api";
+import { fetchDashboardData, getMeApi, loginApi, logoutApi } from "./api";
 import { toDisplayBills } from "./utils";
 
 interface DataContextType {
@@ -69,6 +69,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // Sign Out function
   const signOut = useCallback(() => {
+    void logoutApi();
     setCurrentUser(null);
     setAuthToken(null);
     setBatches([]);
@@ -81,10 +82,23 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Initialize Auth from localStorage or allow unauthenticated login
+  // Initialize Auth from httpOnly cookie or fallback to localStorage
   useEffect(() => {
     isMountedRef.current = true;
     const initAuth = async () => {
+      // 1. First check if a valid httpOnly cookie session exists on the server
+      try {
+        const meUser = await getMeApi();
+        if (meUser && isMountedRef.current) {
+          setCurrentUser(meUser);
+          setIsLoading(false);
+          return;
+        }
+      } catch {
+        // Fall back to saved local session if offline or unauthenticated
+      }
+
+      // 2. Fall back to saved local token if present
       const savedToken = typeof window !== "undefined" ? window.localStorage.getItem("thoorigai-token") : null;
       const savedUser = typeof window !== "undefined" ? window.localStorage.getItem("thoorigai-user") : null;
 
