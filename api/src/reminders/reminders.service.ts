@@ -85,21 +85,20 @@ export class RemindersService {
       const html = buildApprovalEmailHtml({
         headline: 'Stage 1 Review Request',
         recipientName: approver.name,
-        leadMessage: 'A new batch has been prepared and is ready for your Stage 1 review.',
+        leadMessage: 'A new bill collection batch has been initialized and is ready for your Stage 1 verification.',
         batchId: step.batchId,
         batchName: batchName,
+        batchLabel: 'Batch Name:',
         stageOrder: 1,
-        otpCode: initialOtpCode,
-        otpExpiresMinutes: 30,
         ctaUrl: approvalUrl.toString(),
-        ctaText: 'Review Batch →',
-        subNotice: 'Click above to open the batch details. Your authorization code is applied automatically.',
+        ctaText: 'Review & Approve Batch',
+        subNotice: 'Click above to securely review and approve this batch.',
       });
 
       await this.emailService.sendReminderEmail({
         to: approver.email,
-        subject: `Approval required for batch ${step.batchId}`,
-        body: `Hello ${approver.name},\n\nA batch is ready for your review.${initialOtpCode ? `\nAuthorization Code: ${initialOtpCode}` : ''}\n\nReview it here: ${approvalUrl.toString()}`,
+        subject: `Approval required for batch ${batchName}`,
+        body: `Hello ${approver.name},\n\nA new bill collection batch has been initialized and is ready for your Stage 1 verification.\n\nBatch Name: ${batchName}\nWorkflow Stage: Stage 1\n\nReview & Approve Batch: ${approvalUrl.toString()}\n\nClick above to securely review and approve this batch.`,
         html,
       });
       

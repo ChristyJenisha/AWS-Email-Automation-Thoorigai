@@ -175,9 +175,6 @@ export class EmailService {
           html: input.html || `<div style="font-family: sans-serif; line-height: 1.5; color: #1e293b;">
             <p>${body.replace(/\n/g, '<br/>')}</p>
           </div>`,
-          headers: {
-            'X-Auto-Response-Suppress': 'OOF, AutoReply',
-          },
         });
         console.log(`[EMAIL_SENT_SMTP] To: ${to} (MessageId: ${info.messageId})`);
         return { status: 'sent', provider: 'smtp', messageId: info.messageId, to, subject };
