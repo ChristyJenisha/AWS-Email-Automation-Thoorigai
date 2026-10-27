@@ -7,7 +7,7 @@ import { WorkflowTransitionsService } from './workflow-transitions.service.js';
 describe('WorkflowTransitionsService', () => {
   let service: WorkflowTransitionsService;
   let prisma: {
-    stepInstance: { findUnique: ReturnType<typeof vi.fn>; updateMany: ReturnType<typeof vi.fn> };
+    stepInstance: { findUnique: ReturnType<typeof vi.fn>; updateMany: ReturnType<typeof vi.fn>; findFirst?: ReturnType<typeof vi.fn> };
     workflowStage: { findFirst: ReturnType<typeof vi.fn>; update?: ReturnType<typeof vi.fn> };
     contact?: { findFirst: ReturnType<typeof vi.fn> };
     batch: { updateMany: ReturnType<typeof vi.fn> };
@@ -17,7 +17,7 @@ describe('WorkflowTransitionsService', () => {
 
   beforeEach(() => {
     prisma = {
-      stepInstance: { findUnique: vi.fn(), updateMany: vi.fn() },
+      stepInstance: { findUnique: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn() },
       workflowStage: { findFirst: vi.fn(), update: vi.fn() },
       contact: { findFirst: vi.fn() },
       batch: { updateMany: vi.fn() },
@@ -85,6 +85,19 @@ describe('WorkflowTransitionsService', () => {
     });
     expect(prisma.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ entityId: 'step-current', action: 'completed', actor: 'approver@example.test' }),
+    });
+  });
+
+  it('allows the backup approver to complete the active step when primary is unavailable', async () => {
+    prisma.stepInstance.findUnique.mockResolvedValue(activeStep(1));
+    prisma.stepInstance.updateMany.mockResolvedValue({ count: 1 });
+    prisma.workflowStage.findFirst.mockResolvedValue({ id: 'stage-2', reminderIntervalHours: 12 });
+
+    const result = await service.complete('step-current', 'backup@example.test');
+
+    expect(result).toEqual({ stepInstanceId: 'step-current', status: StepStatus.COMPLETED, nextStageId: 'stage-2' });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ entityId: 'step-current', action: 'completed', actor: 'backup@example.test' }),
     });
   });
 
@@ -197,6 +210,40 @@ describe('WorkflowTransitionsService', () => {
       bills: [{ billNumber: 'INV-1001', amount: 1200, balanceDue: 1200, dueDate: null }],
     });
   });
+
+  it('inspects an already-completed step and returns active stage context if batch is in progress', async () => {
+    vi.stubEnv('TOKEN_SIGNING_SECRET', 'test-token-signing-secret-with-sufficient-entropy');
+    const token = service.generateApprovalToken('step-current', 'approver-1', 'demo-org');
+    const completed = {
+      ...activeStep(1),
+      status: StepStatus.COMPLETED,
+    };
+    prisma.stepInstance.findUnique.mockImplementation(async ({ where }: any) => {
+      if (where.id === 'step-current') return completed;
+      if (where.id === 'step-2') return {
+        id: 'step-2',
+        batch: { organizationId: 'demo-org' },
+        stage: { contact: { id: 'approver-2', email: 'approver2@example.test' } },
+      };
+      return null;
+    });
+    prisma.stepInstance.findFirst.mockResolvedValue({
+      id: 'step-2',
+      stage: {
+        order: 2,
+        contact: { id: 'approver-2', name: 'Second Approver', email: 'approver2@example.test' },
+      },
+      batch: { organizationId: 'demo-org' },
+    });
+
+    const result = await service.inspectApprovalToken(token);
+    expect(result.status).toBe(StepStatus.COMPLETED);
+    expect(result.activeStage).toMatchObject({
+      order: 2,
+      approverName: 'Second Approver',
+      approverEmail: 'approver2@example.test',
+    });
+  });
   it('allows an administrator to confirm on behalf of an approver with manual audit attribution', async () => {
     prisma.stepInstance.findUnique.mockResolvedValue(activeStep(1));
     prisma.stepInstance.updateMany.mockResolvedValue({ count: 1 });
@@ -239,7 +286,21 @@ describe('WorkflowTransitionsService', () => {
       organizationId: 'demo-org',
     };
 
-    await expect(service.confirmOnBehalf('step-current', nonAdminUser)).rejects.toThrow('administrator');
+    await expect(service.confirmOnBehalf('step-current', nonAdminUser, 'Valid 10+ characters note')).rejects.toThrow('administrator');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects confirmation on behalf when note is missing or fewer than 10 characters', async () => {
+    const adminUser = {
+      id: 'admin-1',
+      email: 'admin@example.test',
+      role: 'Admin',
+      organizationId: 'demo-org',
+    };
+
+    await expect(service.confirmOnBehalf('step-current', adminUser, '')).rejects.toThrow('at least 10 characters');
+    await expect(service.confirmOnBehalf('step-current', adminUser, 'short')).rejects.toThrow('at least 10 characters');
+    await expect(service.confirmOnBehalf('step-current', adminUser, '          ')).rejects.toThrow('at least 10 characters');
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 

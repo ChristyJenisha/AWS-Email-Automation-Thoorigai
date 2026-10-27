@@ -11,7 +11,10 @@ describe('PaymentsController', () => {
     getPayment: vi.fn().mockResolvedValue({ id: 'payment-1', batch: { id: 'batch-1', organizationId: 'demo-org' } }),
     allocateOnAccount: vi.fn().mockResolvedValue({ id: 'payment-1' }),
   };
-  const authService = { assertOrganizationAccess: vi.fn() };
+  const authService = {
+    assertOrganizationAccess: vi.fn(),
+    assertAdminAccess: vi.fn(),
+  };
   const controller = new PaymentsController(
     paymentsService as unknown as PaymentsService,
     authService as unknown as AuthService,
@@ -25,23 +28,27 @@ describe('PaymentsController', () => {
 
   it('records the authenticated user as the payment actor', async () => {
     const input = { batchId: 'batch-1', amount: 100, allocations: [{ billId: 'bill-1', amount: 100 }] };
+    const user = { id: 'admin-1', role: 'Admin', organizationId: 'demo-org' };
 
-    await expect(controller.create({ user: { id: 'admin-1', organizationId: 'demo-org' } }, input as any)).resolves.toEqual({
+    await expect(controller.create({ user }, input as any)).resolves.toEqual({
       id: 'payment-1',
     });
-    expect(authService.assertOrganizationAccess).toHaveBeenCalledWith({ id: 'admin-1', organizationId: 'demo-org' }, 'demo-org');
+    expect(authService.assertAdminAccess).toHaveBeenCalledWith(user);
+    expect(authService.assertOrganizationAccess).toHaveBeenCalledWith(user, 'demo-org');
     expect(paymentsService.create).toHaveBeenCalledWith(input, 'admin-1');
   });
 
   it('checks organization access before allocating on-account funds', async () => {
     const input = { allocations: [{ billId: 'bill-1', amount: 100 }] };
+    const user = { id: 'admin-1', role: 'Admin', organizationId: 'demo-org' };
     await expect(controller.allocateOnAccount(
-      { user: { id: 'admin-1', organizationId: 'demo-org' } },
+      { user },
       'payment-1',
       input as any,
     )).resolves.toEqual({ id: 'payment-1' });
+    expect(authService.assertAdminAccess).toHaveBeenCalledWith(user);
     expect(authService.assertOrganizationAccess).toHaveBeenCalledWith(
-      { id: 'admin-1', organizationId: 'demo-org' },
+      user,
       'demo-org',
     );
     expect(paymentsService.allocateOnAccount).toHaveBeenCalledWith('payment-1', input.allocations, 'admin-1');

@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, Req, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { AuthService } from '../auth/auth.service.js';
+import type { AuthedRequest } from '../auth/authed-request.interface.js';
 import { WorkflowTransitionsService } from '../workflows/workflow-transitions.service.js';
 import { ConfirmOnBehalfDto, CreateBatchDto, ReassignStepDto } from './batch.dto.js';
 import { BatchesService } from './batches.service.js';
@@ -16,13 +17,13 @@ export class BatchesController {
   ) {}
 
   @Get()
-  list(@Req() request: any, @Query('organizationId') organizationId?: string) {
+  list(@Req() request: AuthedRequest, @Query('organizationId') organizationId?: string) {
     this.authService.assertOrganizationAccess(request?.user, organizationId);
     return this.batchesService.list(organizationId);
   }
 
   @Get(':id')
-  get(@Req() request: any, @Param('id') id: string) {
+  get(@Req() request: AuthedRequest, @Param('id') id: string) {
     const original = this.batchesService.get(id);
     return Promise.resolve(original).then(async (batch) => {
       this.authService.assertOrganizationAccess(request?.user, batch.organizationId);
@@ -31,21 +32,22 @@ export class BatchesController {
   }
 
   @Get(':id/history')
-  async getHistory(@Req() request: any, @Param('id') id: string) {
+  async getHistory(@Req() request: AuthedRequest, @Param('id') id: string) {
     const batch = await this.batchesService.getHistory(id);
     this.authService.assertOrganizationAccess(request?.user, batch.organizationId);
     return batch;
   }
 
   @Post()
-  create(@Req() request: any, @Body() input: CreateBatchDto) {
+  create(@Req() request: AuthedRequest, @Body() input: CreateBatchDto) {
+    this.authService.assertAdminAccess(request?.user);
     this.authService.assertOrganizationAccess(request?.user, input.organizationId);
     return this.batchesService.create(input);
   }
 
   @Post(':id/steps/:stepInstanceId/confirm-on-behalf')
   async confirmOnBehalf(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('id') batchId: string,
     @Param('stepInstanceId') stepInstanceId: string,
     @Body() input: ConfirmOnBehalfDto,
@@ -54,7 +56,7 @@ export class BatchesController {
     const batch = await this.batchesService.get(batchId);
     this.authService.assertOrganizationAccess(request?.user, batch.organizationId);
 
-    const ip = (request.headers?.['x-forwarded-for'] as string)?.split(',')[0]?.trim() || request.ip || 'unknown';
+    const ip = request.ip || 'unknown';
     const userAgent = (request.headers?.['user-agent'] as string) || 'unknown';
 
     return this.transitions.confirmOnBehalf(stepInstanceId, request.user, input.note, {
@@ -63,9 +65,10 @@ export class BatchesController {
       source: 'manual',
     });
   }
-@Post(':id/steps/:stepInstanceId/reassign')
+
+  @Post(':id/steps/:stepInstanceId/reassign')
   async reassignStep(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('id') batchId: string,
     @Param('stepInstanceId') stepInstanceId: string,
     @Body() input: ReassignStepDto,
@@ -74,7 +77,7 @@ export class BatchesController {
     const batch = await this.batchesService.get(batchId);
     this.authService.assertOrganizationAccess(request?.user, batch.organizationId);
 
-    const ip = (request.headers?.['x-forwarded-for'] as string)?.split(',')[0]?.trim() || request.ip || 'unknown';
+    const ip = request.ip || 'unknown';
     const userAgent = (request.headers?.['user-agent'] as string) || 'unknown';
 
     return this.transitions.reassignStep(
@@ -85,11 +88,12 @@ export class BatchesController {
       { ip, userAgent, source: 'manual' },
     );
   }
-@Delete(':id')
-  async delete(@Req() request: any, @Param('id') id: string) {
+
+  @Delete(':id')
+  async delete(@Req() request: AuthedRequest, @Param('id') id: string) {
     this.authService.assertAdminAccess(request?.user);
     const batch = await this.batchesService.get(id);
     this.authService.assertOrganizationAccess(request?.user, batch.organizationId);
-    return this.batchesService.delete(id);
+    return this.batchesService.delete(id, request.user.id);
   }
 }

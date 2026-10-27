@@ -4,7 +4,7 @@ import { ContactsController } from './contacts.controller.js';
 import { ContactsService } from './contacts.service.js';
 
 describe('ContactsController', () => {
-  const contactsService = { listByOrganization: vi.fn().mockResolvedValue([]), create: vi.fn(), update: vi.fn() };
+  const contactsService = { listByOrganization: vi.fn().mockResolvedValue([]), create: vi.fn(), update: vi.fn(), delete: vi.fn() };
   const authService = { assertOrganizationAccess: vi.fn(), assertAdminAccess: vi.fn() };
   const controller = new ContactsController(contactsService as unknown as ContactsService, authService as unknown as AuthService);
 
@@ -24,5 +24,10 @@ describe('ContactsController', () => {
     const input = { email: 'real@example.com' };
     await controller.update({ user: { role: 'Admin', organizationId: 'org-1' } }, 'contact-1', input, 'org-1');
     expect(contactsService.update).toHaveBeenCalledWith('contact-1', 'org-1', input);
+  });
+
+  it('requires admin access before deleting a contact', async () => {
+    await controller.delete({ user: { role: 'Admin', organizationId: 'org-1' } }, 'contact-1', 'org-1');
+    expect(contactsService.delete).toHaveBeenCalledWith('contact-1', 'org-1');
   });
 });

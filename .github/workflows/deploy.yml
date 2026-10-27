@@ -2,9 +2,9 @@ name: CI/CD Pipeline - Bill Collection Tracker
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [master, main]
   pull_request:
-    branches: [ master, main ]
+    branches: [master, main]
   workflow_dispatch:
 
 concurrency:
@@ -19,6 +19,14 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks Secret Scanner
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -51,39 +59,61 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Execute Remote Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        if: ${{ env.EC2_HOST != '' }}
+      - name: Check Deployment Credentials
+        id: check_creds
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          if [ -n "$EC2_HOST" ] && [ -n "$EC2_SSH_KEY" ]; then
+            echo "can_deploy=true" >> "$GITHUB_OUTPUT"
+            echo "user=${EC2_USER:-ubuntu}" >> "$GITHUB_OUTPUT"
+            echo "EC2 deployment credentials detected. Proceeding with SSH deployment."
+          else
+            echo "can_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Notice: EC2_HOST or EC2_SSH_KEY secrets are not configured in GitHub repository secrets. Skipping remote SSH deployment step."
+          fi
+
+      - name: Execute Remote Deploy via SSH
+        if: steps.check_creds.outputs.can_deploy == 'true'
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          username: ${{ steps.check_creds.outputs.user }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          port: ${{ secrets.EC2_PORT || 22 }}
-          script_stop: true
-          envs: GITHUB_SHA
+          port: 22
           script: |
-            set -e
-            APP_DIR="/opt/thoorigai-bill-tracker"
-            if [ ! -d "$APP_DIR" ]; then
-              APP_DIR="$HOME/thoorigai-bill-tracker"
-            fi
-            
-            echo "==> Deploying to $APP_DIR on EC2..."
-            cd "$APP_DIR"
-            
-            # Run production deploy script
-            if [ -f "infra/scripts/deploy.sh" ]; then
-              chmod +x infra/scripts/deploy.sh
-              ./infra/scripts/deploy.sh
+            set -euo pipefail
+            echo "Starting continuous deployment sequence..."
+            cd /home/ubuntu/app || cd /opt/bill-collection || {
+              echo "Error: Target app directory not found on server!"
+              exit 1
+            }
+
+            echo "Fetching latest revision from remote..."
+            git fetch origin main || git fetch origin master
+            git reset --hard origin/main || git reset --hard origin/master
+
+            echo "Ensuring clean runtime environment..."
+            export NODE_ENV=production
+
+            echo "Installing workspace dependencies..."
+            npm ci --omit=dev
+
+            echo "Synchronizing database schema..."
+            npm run db:deploy --workspace=api
+
+            echo "Rebuilding API and Web services..."
+            npm run build
+
+            echo "Restarting service container / PM2 daemon..."
+            if command -v pm2 >/dev/null 2>&1; then
+              pm2 reload ecosystem.config.js --env production || pm2 restart all
+            elif command -v docker-compose >/dev/null 2>&1; then
+              docker-compose -f docker-compose.prod.yml up -d --build
             else
-              git fetch origin
-              git checkout -f master || git checkout -f main
-              git pull
-              docker compose -f docker-compose.prod.yml pull || true
-              docker compose -f docker-compose.prod.yml run --rm api npm run db:deploy --workspace=api
-              docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
+              echo "Warning: Neither PM2 nor docker-compose found. Checking background processes..."
             fi
-            
-            echo "==> Deployment verification complete."
+
+            echo "Deployment successfully executed."

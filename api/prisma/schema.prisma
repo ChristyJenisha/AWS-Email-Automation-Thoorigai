@@ -52,6 +52,23 @@ enum NotificationStatus {
   @@map("notification_status")
 }
 
+enum Role {
+  ADMIN
+  APPROVER
+  BACKUP_APPROVER
+
+  @@map("contact_role")
+}
+
+enum OutboxStatus {
+  PENDING
+  SENT
+  FAILED
+  DEAD
+
+  @@map("outbox_status")
+}
+
 model Organization {
   id               String             @id @default(cuid())
   name             String
@@ -69,7 +86,8 @@ model Contact {
   organizationId String          @map("org_id")
   name           String
   email          String
-  role           String
+  passwordHash   String?         @map("password_hash")
+  role           Role            @default(APPROVER)
   isActive       Boolean         @default(true) @map("is_active")
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
@@ -122,6 +140,7 @@ model Batch {
   organizationId String          @map("org_id")
   templateId     String          @map("template_id")
   status         BatchStatus     @default(IN_PROGRESS)
+  deletedAt      DateTime?       @map("deleted_at")
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
@@ -146,6 +165,7 @@ model Bill {
   status      BillStatus           @default(PENDING)
   dueDate     DateTime?            @map("due_date") @db.Date
   fileKey     String?              @map("file_key")
+  deletedAt   DateTime?            @map("deleted_at")
   createdAt   DateTime             @default(now()) @map("created_at")
   updatedAt   DateTime             @updatedAt @map("updated_at")
   batch       Batch                @relation(fields: [batchId], references: [id], onDelete: Cascade)
@@ -191,6 +211,8 @@ model Payment {
   paidAt            DateTime             @default(now()) @map("paid_at")
   reference         String?
   proofKey          String?              @map("proof_key")
+  idempotencyKey    String?              @unique @map("idempotency_key")
+  deletedAt         DateTime?            @map("deleted_at")
   createdAt         DateTime             @default(now()) @map("created_at")
   batch             Batch                @relation(fields: [batchId], references: [id], onDelete: Cascade)
   allocations       PaymentAllocation[]
@@ -243,4 +265,25 @@ model Notification {
   @@index([batchId, createdAt])
   @@index([stepInstanceId])
   @@map("notifications")
+}
+
+model Outbox {
+  id          String       @id @default(cuid())
+  channel     String       @default("email")
+  recipient   String
+  subject     String
+  body        String       @db.Text
+  html        String?      @db.Text
+  status      OutboxStatus @default(PENDING)
+  attempts    Int          @default(0)
+  lastError   String?      @map("last_error")
+  nextRetryAt DateTime?    @map("next_retry_at")
+  sentAt      DateTime?    @map("sent_at")
+  metadata    Json?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@index([status, nextRetryAt])
+  @@index([createdAt])
+  @@map("outbox")
 }

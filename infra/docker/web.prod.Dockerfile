@@ -6,6 +6,7 @@ RUN apk add --no-cache libc6-compat
 
 COPY package.json package-lock.json ./
 COPY api/package.json api/package.json
+COPY api/prisma api/prisma/
 COPY web/package.json web/package.json
 
 RUN npm ci
@@ -31,7 +32,7 @@ ENV PORT=3000
 COPY package.json package-lock.json ./
 COPY web/package.json web/package.json
 
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 COPY --from=builder /workspace/web/.next /workspace/web/.next
 COPY --from=builder /workspace/web/public /workspace/web/public 2>/dev/null || true

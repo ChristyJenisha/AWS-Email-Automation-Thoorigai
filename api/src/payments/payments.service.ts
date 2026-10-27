@@ -4,42 +4,34 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
-import { BatchStatus, BillStatus, Prisma } from '@prisma/client';
+import { BatchStatus, BillStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { S3StorageService } from '../s3/s3-storage.service.js';
 import {
   CreatePaymentDto,
   PaymentAllocationInputDto,
 } from './payment.dto.js';
-
-const paymentDetails = {
-  allocations: {
-    include: {
-      bill: {
-        select: {
-          id: true,
-          billNumber: true,
-          amount: true,
-          balanceDue: true,
-          status: true,
-        },
-      },
-    },
-  },
-} satisfies Prisma.PaymentInclude;
-
-const toCents = (amount: number) => Math.round(amount * 100);
-
-const toDecimal = (cents: number) =>
-  new Prisma.Decimal((cents / 100).toFixed(2));
+import {
+  paymentDetails,
+  toCents,
+  toDecimal,
+  assertValidDeductions,
+} from './payments.utils.js';
+import { PaymentsProofService } from './payments-proof.service.js';
 
 @Injectable()
 export class PaymentsService {
+  private readonly proofService: PaymentsProofService;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly s3StorageService: S3StorageService,
-  ) {}
+    @Optional() proofService?: PaymentsProofService,
+  ) {
+    this.proofService = proofService ?? new PaymentsProofService(this.prisma, this.s3StorageService);
+  }
 
   async getBatch(batchId: string) {
     const batch = await this.prisma.batch.findUnique({
@@ -87,6 +79,16 @@ export class PaymentsService {
   }
 
   async create(input: CreatePaymentDto, actor: string) {
+    const idempotencyKey = input.idempotencyKey?.trim() || undefined;
+    if (idempotencyKey) {
+      const existing = await this.prisma.payment.findUnique({
+        where: { idempotencyKey },
+        include: paymentDetails,
+      });
+      if (existing) {
+        return existing;
+      }
+    }
     const allocations = input.allocations ?? [];
 
     const billIds = allocations.map(
@@ -134,7 +136,8 @@ export class PaymentsService {
       );
     }
 
-    return this.prisma.$transaction(
+    try {
+      return await this.prisma.$transaction(
       async (transaction) => {
         const batch = await transaction.batch.findUnique({
           where: { id: input.batchId },
@@ -207,6 +210,7 @@ export class PaymentsService {
               reference:
                 input.reference?.trim() ||
                 undefined,
+              idempotencyKey,
               allocations: {
                 create: allocations.map(
                   (allocation) => ({
@@ -344,107 +348,40 @@ export class PaymentsService {
         return payment;
       },
     );
+    } catch (error: any) {
+      if (idempotencyKey && (error?.code === 'P2002' || error?.message?.includes('idempotency_key'))) {
+        const existing = await this.prisma.payment.findUnique({
+          where: { idempotencyKey },
+          include: paymentDetails,
+        });
+        if (existing) return existing;
+      }
+      throw error;
+    }
   }
 
   // --------------------------------------------------
-  // PAYMENT PROOF - S3 PRESIGNED UPLOAD URL
+  // PAYMENT PROOF DELEGATION (P3-5 Modularization)
   // --------------------------------------------------
 
-  async createProofUploadUrl(
-    paymentId: string,
-    contentType: string,
-  ) {
-    const payment =
-      await this.prisma.payment.findUnique({
-        where: { id: paymentId },
-        select: {
-          id: true,
-        },
-      });
-
-    if (!payment) {
-      throw new NotFoundException(
-        'Payment not found',
-      );
-    }
-
-    const upload =
-      await this.s3StorageService.createPaymentProofUploadUrl(
-        paymentId,
-        contentType,
-      );
-
-    return upload;
+  async createProofUploadUrl(paymentId: string, contentType: string) {
+    return this.proofService.createProofUploadUrl(paymentId, contentType);
   }
 
   async confirmProofUpload(paymentId: string, key: string) {
-    const payment = await this.prisma.payment.findUnique({
-      where: { id: paymentId },
-      select: { id: true },
-    });
-
-    if (!payment) {
-      throw new NotFoundException('Payment not found');
-    }
-    if (!key.startsWith(`payment-proofs/${paymentId}/`)) {
-      throw new BadRequestException('Proof file does not belong to this payment');
-    }
-
-    await this.s3StorageService.confirmUploadedObject(key);
-    return this.prisma.payment.update({
-      where: { id: paymentId },
-      data: { proofKey: key },
-      select: { id: true, proofKey: true },
-    });
+    return this.proofService.confirmProofUpload(paymentId, key);
   }
 
   async storeProofFile(paymentId: string, contentType: string, content: Buffer) {
-    const payment = await this.prisma.payment.findUnique({
-      where: { id: paymentId },
-      select: { id: true },
-    });
-    if (!payment) throw new NotFoundException('Payment not found');
-
-    const stored = await this.s3StorageService.storePaymentProof(paymentId, contentType, content);
-    return this.prisma.payment.update({
-      where: { id: paymentId },
-      data: { proofKey: stored.key },
-      select: { id: true, proofKey: true },
-    });
+    return this.proofService.storeProofFile(paymentId, contentType, content);
   }
 
   async createProofDownloadUrl(paymentId: string) {
-    const payment = await this.prisma.payment.findUnique({
-      where: { id: paymentId },
-      select: { id: true, proofKey: true },
-    });
-
-    if (!payment) {
-      throw new NotFoundException('Payment not found');
-    }
-    if (!payment.proofKey) {
-      throw new NotFoundException('Payment proof not found');
-    }
-
-    if (payment.proofKey.startsWith(`local-payment-proofs/${paymentId}/`)) {
-      return { local: true as const };
-    }
-    if (!payment.proofKey.startsWith(`payment-proofs/${paymentId}/`)) {
-      throw new NotFoundException('Payment proof not found');
-    }
-
-    return this.s3StorageService.createDownloadUrl(payment.proofKey);
+    return this.proofService.createProofDownloadUrl(paymentId);
   }
 
   async getLocalProofFile(paymentId: string) {
-    const payment = await this.prisma.payment.findUnique({
-      where: { id: paymentId },
-      select: { proofKey: true },
-    });
-    if (!payment?.proofKey?.startsWith(`local-payment-proofs/${paymentId}/`)) {
-      throw new NotFoundException('Local payment proof not found');
-    }
-    return this.s3StorageService.readLocalPaymentProof(paymentId, payment.proofKey);
+    return this.proofService.getLocalProofFile(paymentId);
   }
 
   async allocateOnAccount(
@@ -462,7 +399,7 @@ export class PaymentsService {
       );
     }
 
-    this.assertValidDeductions(allocations);
+    assertValidDeductions(allocations);
 
     return this.prisma.$transaction(
       async (transaction) => {
@@ -745,34 +682,7 @@ export class PaymentsService {
       },
     );
   }
-
-  private assertValidDeductions(
-    allocations: PaymentAllocationInputDto[],
-  ) {
-    const hasInvalidDeduction =
-      allocations.some(
-        (allocation) => {
-          const deductionCents =
-            toCents(
-              allocation.deductionAmount ??
-                0,
-            );
-
-          return (
-            (deductionCents > 0) !==
-            Boolean(
-              allocation.deductionType,
-            )
-          );
-        },
-      );
-
-    if (hasInvalidDeduction) {
-      throw new BadRequestException(
-        'A deduction type is required when a deduction amount is provided',
-      );
-    }
-  }
 }
+
 
 

@@ -29,15 +29,18 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-tracker}:${POSTGRES_PASSWORD:-local-dev-only}@db:5432/${POSTGRES_DB:-bill_tracker}?schema=public
       PORT: 3001
+      DEMO_MODE: ${DEMO_MODE:-${NEXT_PUBLIC_DEMO_MODE:-false}}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       AWS_PROFILE: thoorigai
       AWS_REGION: ap-south-1
       AWS_SDK_LOAD_CONFIG: "1"
     ports:
+      - "80:3001"
       - "${API_PORT:-3001}:3001"
     volumes:
       - ./api:/workspace/api
       - /workspace/node_modules
-      - C:/Users/acer/.aws:/root/.aws:ro
     depends_on:
       db:
         condition: service_healthy
@@ -46,10 +49,14 @@ services:
     build:
       context: .
       dockerfile: infra/docker/web.Dockerfile
-    command: npm run dev --workspace=web -- --hostname 0.0.0.0
+      args:
+        NEXT_PUBLIC_DEMO_MODE: ${NEXT_PUBLIC_DEMO_MODE:-${DEMO_MODE:-false}}
+    command: npm run dev --workspace=web -- --webpack --hostname 0.0.0.0
     env_file: .env
     environment:
+      INTERNAL_API_URL: http://api:3001
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      NEXT_PUBLIC_DEMO_MODE: ${NEXT_PUBLIC_DEMO_MODE:-${DEMO_MODE:-false}}
     ports:
       - "${WEB_PORT:-3000}:3000"
     volumes:

@@ -1,0 +1,274 @@
+"use client";
+
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
+import { AppUser, BatchRecord, ContactRecord, DisplayBill, WorkflowRecord } from "../types";
+import { fetchDashboardData, getMeApi, loginApi, logoutApi } from "./api";
+import { toDisplayBills } from "./utils";
+
+interface DataContextType {
+  batches: BatchRecord[];
+  bills: DisplayBill[];
+  contacts: ContactRecord[];
+  workflows: WorkflowRecord[];
+  currentUser: AppUser | null;
+  authToken: string | null;
+  isLoading: boolean;
+  isRefreshing: boolean;
+  secondsAgo: number;
+  lastUpdated: Date | null;
+  error: string | null;
+  overdueCount: number;
+  inFlightCount: number;
+  readyForPaymentCount: number;
+  refreshData: () => Promise<void>;
+  setCurrentUser: (user: AppUser | null) => void;
+  setAuthToken: (token: string | null) => void;
+  loginWithCredentials: (email: string, password?: string) => Promise<boolean>;
+  signOut: () => void;
+}
+
+const DataContext = createContext<DataContextType | undefined>(undefined);
+
+export function DataProvider({ children }: { children: React.ReactNode }) {
+  const [batches, setBatches] = useState<BatchRecord[]>([]);
+  const [bills, setBills] = useState<DisplayBill[]>([]);
+  const [contacts, setContacts] = useState<ContactRecord[]>([]);
+  const [workflows, setWorkflows] = useState<WorkflowRecord[]>([]);
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [secondsAgo, setSecondsAgo] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  const isMountedRef = useRef(true);
+  const requestSeqRef = useRef(0);
+
+  // Sign In function
+  const loginWithCredentials = useCallback(async (email: string, password?: string): Promise<boolean> => {
+    setError(null);
+    try {
+      const effectivePassword = password ?? (process.env.NEXT_PUBLIC_DEMO_MODE === "true" ? "demo123" : "");
+      const result = await loginApi(email, effectivePassword);
+      if (result && isMountedRef.current) {
+        setAuthToken(result.token);
+        setCurrentUser(result.user);
+        return true;
+      }
+      throw new Error("Invalid credentials or server unavailable");
+    } catch (err) {
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : "Sign-in failed");
+      }
+      return false;
+    }
+  }, []);
+
+  // Sign Out function
+  const signOut = useCallback(() => {
+    void logoutApi();
+    setCurrentUser(null);
+    setAuthToken(null);
+    setBatches([]);
+    setBills([]);
+    setContacts([]);
+    setWorkflows([]);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("thoorigai-token");
+      window.localStorage.removeItem("thoorigai-user");
+    }
+  }, []);
+
+  // Initialize Auth from httpOnly cookie
+  useEffect(() => {
+    isMountedRef.current = true;
+    const initAuth = async () => {
+      // 1. Check if a valid httpOnly cookie session exists on the server
+      try {
+        const meUser = await getMeApi();
+        if (meUser && isMountedRef.current) {
+          setCurrentUser(meUser);
+          setIsLoading(false);
+          return;
+        }
+      } catch {
+        // Offline or unauthenticated
+      }
+
+      // No active session found; finish loading so SignInView can be presented
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
+    };
+
+    void initAuth();
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Fetch Dashboard Data with request sequencing
+  const loadData = useCallback(async (isBackground = false) => {
+    console.count("loadData");
+    if (!currentUser) return;
+
+    const currentSeq = ++requestSeqRef.current;
+
+    if (isBackground) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    setError(null);
+
+    try {
+      const orgId = currentUser.organizationId || "demo-org";
+      const [workflowsRes, batchesRes, contactsRes] = await fetchDashboardData(authToken, orgId);
+
+      if (!workflowsRes.ok || !batchesRes.ok || !contactsRes.ok) {
+        throw new Error("Unable to fetch ledger data");
+      }
+
+      const [freshWorkflows, freshBatches, freshContacts] = await Promise.all([
+        workflowsRes.json() as Promise<WorkflowRecord[]>,
+        batchesRes.json() as Promise<BatchRecord[]>,
+        contactsRes.json() as Promise<ContactRecord[]>,
+      ]);
+
+      // Guard against slow background polls overwriting fresher responses
+      if (currentSeq < requestSeqRef.current) {
+        return;
+      }
+
+      if (isMountedRef.current) {
+        setWorkflows(freshWorkflows);
+        setBatches(freshBatches);
+        setBills(toDisplayBills(freshBatches));
+        setContacts(freshContacts);
+        setLastUpdated(new Date());
+        setSecondsAgo(0);
+      }
+    } catch (err) {
+      if (currentSeq >= requestSeqRef.current && isMountedRef.current) {
+        setError(err instanceof Error ? err.message : "Error refreshing dashboard");
+      }
+    } finally {
+      if (currentSeq >= requestSeqRef.current && isMountedRef.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    }
+  }, [authToken, currentUser]);
+
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  // 60-second ticker for aging calculations
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Initial load when auth becomes available (deferred to next tick to avoid cascading renders)
+  useEffect(() => {
+    if (authToken && currentUser) {
+      const timer = setTimeout(() => {
+        void loadData(false);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [authToken, currentUser, loadData]);
+
+  // Visibility-aware 30s background poll + immediate refetch on tab visibility change
+  useEffect(() => {
+    if (!authToken || !currentUser) return;
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void loadData(true);
+      }
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+
+    const intervalId = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void loadData(true);
+      }
+    }, 30000);
+
+    return () => {
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+      clearInterval(intervalId);
+    };
+  }, [authToken, currentUser, loadData]);
+
+  // Seconds-ago ticker (every 1s)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSecondsAgo((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Compute live attention counts
+  const overdueCount = batches.filter((b) => {
+    if (b.status !== "IN_PROGRESS") return false;
+    const step = b.stepInstances?.find((s) => s.status === "ALERTED" || s.status === "ESCALATED");
+    if (!step) return false;
+    if (step.status === "ESCALATED") return true;
+    if ((step.reminderCount ?? 0) > 1) return true;
+    if (step.alertedAt) {
+      const hours = (nowMs - new Date(step.alertedAt).getTime()) / (1000 * 60 * 60);
+      return hours > 24;
+    }
+    return false;
+  }).length;
+
+  const inFlightCount = batches.filter((b) => b.status === "IN_PROGRESS").length;
+  const readyForPaymentCount = batches.filter((b) => b.status === "READY_FOR_PAYMENT").length;
+
+  const refreshData = useCallback(async () => {
+    await loadData(true);
+  }, [loadData]);
+
+  return (
+    <DataContext.Provider
+      value={{
+        batches,
+        bills,
+        contacts,
+        workflows,
+        currentUser,
+        authToken,
+        isLoading,
+        isRefreshing,
+        secondsAgo,
+        lastUpdated,
+        error,
+        overdueCount,
+        inFlightCount,
+        readyForPaymentCount,
+        refreshData,
+        setCurrentUser,
+        setAuthToken,
+        loginWithCredentials,
+        signOut,
+      }}
+    >
+      {children}
+    </DataContext.Provider>
+  );
+}
+
+export function useDataContext() {
+  const context = useContext(DataContext);
+  if (!context) {
+    throw new Error("useDataContext must be used within a DataProvider");
+  }
+  return context;
+}

@@ -9,7 +9,12 @@ describe('BatchesService', () => {
   let prisma: {
     organization: { findUnique: ReturnType<typeof vi.fn> };
     workflowTemplate: { findFirst: ReturnType<typeof vi.fn> };
-    batch: { findMany: ReturnType<typeof vi.fn>; findUnique: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
+    batch: {
+      findMany: ReturnType<typeof vi.fn>;
+      findUnique: ReturnType<typeof vi.fn>;
+      create: ReturnType<typeof vi.fn>;
+      update?: ReturnType<typeof vi.fn>;
+    };
     auditLog: { create: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
     $transaction: ReturnType<typeof vi.fn>;
   };

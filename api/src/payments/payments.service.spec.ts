@@ -178,4 +178,15 @@ describe('PaymentsService', () => {
       .rejects.toThrow('Allocation must be positive and cannot exceed the on-account balance');
     expect(transaction.paymentAllocation.createMany).not.toHaveBeenCalled();
   });
+  it('returns existing payment when duplicate idempotencyKey is submitted without duplicate writes', async () => {
+    const existingPayment = { id: 'payment-existing', idempotencyKey: 'key-123', amount: 250 };
+    prisma.payment.findUnique.mockResolvedValue(existingPayment);
+
+    const result = await service.create({ ...input, idempotencyKey: 'key-123' }, 'demo-admin');
+
+    expect(result).toBe(existingPayment);
+    expect(transaction.batch.findUnique).not.toHaveBeenCalled();
+    expect(transaction.payment.create).not.toHaveBeenCalled();
+  });
+
 });

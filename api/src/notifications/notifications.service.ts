@@ -83,9 +83,22 @@ export class NotificationsService {
       return { status: 'ignored', reason: 'invalid_payload' };
     }
 
-    // 1. AWS SNS Topic Subscription Confirmation
+    // 1. AWS SNS Topic Subscription Confirmation (with SSRF & Topic validation)
     if (payload.Type === 'SubscriptionConfirmation' && payload.SubscribeURL) {
       try {
+        const subscribeUrl = new URL(payload.SubscribeURL);
+        // Verify hostname matches official AWS SNS endpoints to prevent SSRF
+        if (!/^sns\.[a-z0-9-]+\.amazonaws\.com$/.test(subscribeUrl.hostname)) {
+          console.warn('[SNS_SECURITY_ALERT] Rejected SubscribeURL with invalid AWS hostname:', subscribeUrl.hostname);
+          return { status: 'rejected', reason: 'invalid_subscription_hostname' };
+        }
+
+        // Verify TopicArn if configured in environment
+        if (process.env.SNS_TOPIC_ARN && payload.TopicArn && payload.TopicArn !== process.env.SNS_TOPIC_ARN) {
+          console.warn('[SNS_SECURITY_ALERT] Subscription TopicArn mismatch:', payload.TopicArn);
+          return { status: 'rejected', reason: 'topic_mismatch' };
+        }
+
         const response = await fetch(payload.SubscribeURL);
         console.log(`[SNS_SUBSCRIPTION_CONFIRMED] Topic: ${payload.TopicArn}, status: ${response.status}`);
         return { status: 'confirmed', topicArn: payload.TopicArn };
@@ -97,6 +110,10 @@ export class NotificationsService {
 
     // 2. AWS SES Event Notifications via SNS
     if (payload.Type === 'Notification') {
+      if (process.env.SNS_TOPIC_ARN && payload.TopicArn && payload.TopicArn !== process.env.SNS_TOPIC_ARN) {
+        console.warn('[SNS_SECURITY_ALERT] Rejected Notification from unauthorized TopicArn:', payload.TopicArn);
+        return { status: 'rejected', reason: 'topic_mismatch' };
+      }
       let message = payload.Message;
       if (typeof message === 'string') {
         try {

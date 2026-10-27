@@ -8,7 +8,7 @@ import { WorkflowTransitionsService } from './workflow-transitions.service.js';
 describe('WorkflowsController', () => {
   let controller: WorkflowsController;
   const workflowsService = { list: vi.fn(), get: vi.fn(), create: vi.fn(), replace: vi.fn(), delete: vi.fn() };
-  const authService = { assertOrganizationAccess: vi.fn() };
+  const authService = { assertOrganizationAccess: vi.fn(), assertAdminAccess: vi.fn() };
   const workflowTransitionsService = {
     complete: vi.fn(),
     returnToPrevious: vi.fn(),

@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { AuthService } from '../auth/auth.service.js';
+import type { AuthedRequest } from '../auth/authed-request.interface.js';
 import { NotificationsService } from './notifications.service.js';
 
 @Controller('notifications')
@@ -12,7 +13,7 @@ export class NotificationsController {
   ) {}
 
   @Get('batch/:batchId')
-  async listByBatch(@Req() request: any, @Param('batchId') batchId: string) {
+  async listByBatch(@Req() request: AuthedRequest, @Param('batchId') batchId: string) {
     const organizationId = await this.notificationsService.getBatchOrganizationId(batchId);
     this.authService.assertOrganizationAccess(request?.user, organizationId);
     return this.notificationsService.listByBatch(batchId);
@@ -20,7 +21,7 @@ export class NotificationsController {
 
   @Post('batch/:batchId/send/:notificationId')
   async markSent(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('batchId') batchId: string,
     @Param('notificationId') notificationId: string,
   ) {

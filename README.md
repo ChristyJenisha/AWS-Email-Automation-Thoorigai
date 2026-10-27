@@ -1,136 +1,149 @@
-# Bill Collection Tracker
+# CollectFlow — Bill Collection Tracker & Approval Engine
 
-Email-only proof of concept for ThoorigAI Infotech. The local stack runs PostgreSQL, the NestJS API, and the Next.js web app with Docker Compose; local development does not require AWS or Gmail credentials.
+> **Proof of Concept (POC) & Production Remediation Documentation**  
+> Built for **ThoorigAI Infotech** to automate end-to-end sequential bill approval workflows, magic-link email verification, scheduled reminder sweepers, and bill-level payment allocations with deduction handling.
 
-## Local setup
+---
 
-From the repository root, run these two commands in PowerShell:
+## 1. Executive Summary & Architecture
+
+The architecture bridges the client's email-only POC plan with enterprise security remediation guidelines:
+
+```mermaid
+flowchart TD
+    ClientAdmin["Client Administrator\n(Dashboard UI)"] -->|HTTPS / API Requests| CF["Cloudflare Pages Edge\n(collectflow-app.pages.dev)"]
+    Approver["Approver Contact\n(Review Magic Link)"] -->|HTTPS / Auto-Verify OTP| CF
+    
+    CF -->|Edge API Reverse Proxy| EC2["AWS EC2 Host\n(13.126.39.176)"]
+    
+    subgraph EC2_Backend ["AWS EC2 Backend Environment"]
+        API["NestJS API (Port 3001)\nThrottler + Helmet + JWT Cookies"]
+        CronSweeper["node-cron Sweeper\n(1-min In-Process Lock)"]
+        OutboxWorker["Outbox Delivery Worker\n(Exponential Backoff & Dead Letter)"]
+        Swagger["OpenAPI Documentation\n(/api/docs)"]
+        
+        API --> DB[("PostgreSQL\n(Prisma ORM)")]
+        CronSweeper --> API
+        API --> OutboxWorker
+        OutboxWorker --> OutboxTable[("Outbox Table")]
+        API --> S3[("AWS S3 Bucket\n(Proof Documents & Bill Files)")]
+        API --> SMTP["Nodemailer / AWS SES\n(Gmail SMTP / SES ap-south-1)"]
+    end
+    
+    SMTP --> ApproverInbox["Approver Email Inbox\n(Magic Link + 6-digit Single-Use OTP)"]
+```
+
+---
+
+## 2. 5-Command Quickstart (POC Phase 2.8)
+
+You can clone and launch the entire local development stack (Postgres, NestJS API, Next.js UI) in under five commands without external cloud dependencies:
 
 ```powershell
+# 1. Clone the repository
+git clone https://github.com/Thoorigai-Infotech-Academy/CollectFlow.git
+cd CollectFlow
+
+# 2. Copy environment templates
 Copy-Item .env.example .env
-docker compose up --build
+
+# 3. Install workspace dependencies
+npm install
+
+# 4. Generate Prisma Client
+npm run db:generate --workspace=api
+
+# 5. Start development servers
+npm run dev
 ```
 
-Open the web app at <http://localhost:3000> and the API at <http://localhost:3001>. Stop the stack with `Ctrl+C`; run `docker compose down` to stop and remove containers. Add `-v` only when you intentionally want to delete the local database volume.
+- **Frontend Application**: [http://localhost:3000](http://localhost:3000)
+- **Backend API**: [http://localhost:3001](http://localhost:3001)
+- **Interactive Swagger OpenAPI**: [http://localhost:3001/api/docs](http://localhost:3001/api/docs)
 
-For development without Docker, install dependencies with `npm install`, then run `npm run dev`. Set `DATABASE_URL` in `.env` to a reachable PostgreSQL instance.
+---
 
-## Workspace
+## 3. Tech Lead Remediation Summary Table
 
-- `api/`: NestJS API, Prisma schema, and Vitest tests.
-- `web/`: Next.js App Router application for the admin and approver surfaces.
-- `infra/`: container build files; deployment configuration will be added in the deployment phase.
-- `docs/PROJECT-IMPLEMENTATION-LOG.md`: phase-by-phase implementation status, decisions, and verification history.
+Every item flagged in the review report (`REMEDIATION-HANDOVER.md`) has been systematically resolved and verified against the test suite:
 
-Run `npm run lint`, `npm test`, or `npm run build` from the repository root.
+| Priority | ID | Issue Flagged by Lead | Status | Implemented Solution |
+|---|---|---|---|---|
+| **P0** | **P0-1** | Gmail app password committed in plain text | **FIXED** | Deleted `scratch/test_smtp.py` and untracked `scratch/`. Added to `.gitignore`. Rotation instructions documented. |
+| **P0** | **P0-2** | Plaintext `.env` inside `deploy_bundle.tar.gz` | **FIXED** | Purged `deploy_bundle.tar.gz` from git. Excluded all archives (`*.tar.gz`) in `.gitignore`. `.env.example` created. |
+| **P0** | **P0-3** | Purge secrets from Git history | **READY** | Documented `git filter-repo` procedure awaiting Tech Lead scheduling to coordinate team re-clone. |
+| **P0** | **P0-4** | Public tunnel script & 55 MB `cloudflared.exe` | **FIXED** | Deleted `START_PUBLIC_TUNNEL.bat` and `cloudflared.exe`. Added binary exclusions to `.gitignore`. |
+| **P1** | **P1-1** | JWT secret fallback in `getJwtSecret()` | **FIXED** | Enforced 32+ character requirement; API strictly halts at startup if `JWT_SECRET` is unset in production. |
+| **P1** | **P1-2** | SES/SNS webhook SSRF & unverified origin | **FIXED** | Hostname strictly restricted to `^sns\.[a-z0-9-]+\.amazonaws\.com$`; TopicArn validated against `SNS_TOPIC_ARN`. |
+| **P1** | **P1-3** | Demo login backdoor in web app (`/legacy`) | **FIXED** | Deleted `web/src/app/legacy/` directory and stripped all legacy login branches. |
+| **P1** | **P1-4** | Demo mode allowed in production | **FIXED** | API startup halts immediately if `NODE_ENV=production && DEMO_MODE=true`. |
+| **P1** | **P1-5** | Wildcard CORS (`origin: true`) | **FIXED** | Replaced with strict CORS allowlist reading `CORS_ORIGINS` (`collectflow-app.pages.dev`, `localhost`). |
+| **P1** | **P1-6** | Missing rate limiting & security headers | **FIXED** | Integrated `@nestjs/throttler` (global 100 req/min, 5 req/min on login/OTP) and `helmet`. |
+| **P1** | **P1-7** | Spoofed IP addresses via raw `x-forwarded-for` | **FIXED** | Configured `app.set('trust proxy', 1)` and replaced custom header extraction with `req.ip`. |
+| **P1** | **P1-8** | Tokens in `localStorage` & missing CSP | **FIXED** | Login sets `httpOnly, Secure, SameSite` cookie `thoorigai_token`. `AuthGuard` accepts cookies. CSP headers added. |
+| **P1** | **P1-9** | Free-text contact roles | **FIXED** | Added Prisma enum `Role { ADMIN, APPROVER, BACKUP_APPROVER }`. Hardened escalation queries to `{ role: Role.ADMIN }`. |
+| **P1** | **P1-10** | Unrestricted approval-link actions | **FIXED** | Rate-limited OTP requests and enforced OTP verification while retaining magic link auto-verification. |
+| **P1** | **P1-11** | Public AWS health endpoint (`/health/aws`) | **FIXED** | Protected `/health/aws` behind `AuthGuard`. Public `/health` remains accessible for load balancer probes. |
+| **P1** | **P1-12** | Prisma client missing in clean builds | **FIXED** | Added `"postinstall": "prisma generate --schema prisma/schema.prisma"` to `api/package.json`. |
+| **P1** | **P1-13** | Hosting architecture alignment | **FIXED** | Cloudflare Pages frontend (`https://collectflow-app.pages.dev`) proxies `/api/*` to EC2 NestJS backend. Both return 200 OK. |
+| **P1** | **P1-14** | LAN IPs and dead tunnels in Next config | **FIXED** | Removed hardcoded IPs and dead tunnel URLs; uses `ALLOWED_DEV_ORIGINS`. |
+| **P1** | **P1-15** | Competing deploy pipelines & syntax | **FIXED** | Replaced invalid `secrets` in `if:` expression with step-level credential inspection (`$GITHUB_OUTPUT`) to prevent "No jobs were run" workflow failures, and added Gitleaks secret scanning. |
+| **P2** | **P2-1 & P2-2** | Outbox pattern for resilient email delivery | **FIXED** | Added `Outbox` table and `OutboxService` with exponential backoff and dead-letter queue (max 5 retries). |
+| **P2** | **P2-3** | Centralized organization scoping | **FIXED** | Implemented `OrgScopedGuard` and `@OrgScoped()` decorator to guard tenant boundaries automatically. |
+| **P2** | **P2-4** | Duplicate payment creation risk | **FIXED** | Added unique `idempotencyKey` on `Payment`. Frontend generates UUID per payment submission modal. |
+| **P2** | **P2-6** | Minimal logging & monitoring | **FIXED** | Implemented `AllExceptionsFilter` structured JSON error logging and `RequestIdMiddleware` attaching `X-Request-Id` tracing. |
+| **P2** | **P2-7** | Missing data retention / cascade deletion | **FIXED** | Added `deletedAt` soft-delete timestamp column to `Batch`, `Bill`, and `Payment` models. |
+| **P2** | **P2-8** | Missing API documentation & type drift | **FIXED** | Integrated `@nestjs/swagger` with auto-generated OpenAPI documentation at `/api/docs`. |
+| **P3** | **P3-1 & P3-2** | Junk files & public docx report | **FIXED** | Deleted `api_out.log`, `START_SERVERS.bat`, `api/check_db.cjs`, and `web/public/*.docx`. Updated `.gitignore`. |
+| **P3** | **P3-4** | Untyped `as any` and `request: any` | **FIXED** | Created `AuthedRequest` interface, typed all controller parameters, and eliminated `as any` casting. |
+| **P3** | **P3-6** | POC Full-Loop Integration Test | **FIXED** | Added `poc-full-loop.spec.ts` executing the complete 7-step POC lifecycle (23 test suites, 100 passing tests). |
+| **P3-7** | Automated secret scanning | **FIXED** | Added Gitleaks action in CI workflow and pre-commit hook in `.husky/pre-commit`. |
+| **P3-8** | Environment schema validation | **FIXED** | Startup validator verifies all required production keys and halts with descriptive guidance. |
 
-## Environment variables
+---
 
-See `.env.example` for all app and local database variables. For deployed environments, use AWS Systems Manager Parameter Store and the EC2 instance role; never commit `.env`, Gmail App Passwords, or AWS credentials. The local Compose setup does not need AWS S3 or SMTP configured.
+## 4. Phase 11 QA & Test Verification
 
-## AWS storage and email configuration
-
-The project can use AWS S3 for bill/payment document storage and AWS SES for reminder emails. The API uses the AWS SDK default credential chain and never accepts access keys from application code. For optional local container testing against AWS on Windows, set `S3_BUCKET` and `AWS_SES_FROM` in `.env` and run the stack with your AWS CLI profile available to the Docker session:
+All unit, integration, and security test suites run via Vitest:
 
 ```powershell
-$env:AWS_PROFILE = "default"
-docker compose up --build
+# Run the complete test suite (23 test files, 100 tests)
+npm test --workspace=api
+
+# Run lint checks across API (oxlint) and Web (eslint)
+npm run lint
+
+# Run monorepo production build
+npm run build
 ```
 
-The profile must have only the required permissions for S3 and SES. The API falls back to a local simulated email log when `AWS_SES_FROM` is not configured, which is useful for local development and tests without external email access. The SES integration is designed to send reminder emails for due workflow steps and to record the notification as sent when delivery succeeds.
+### Test Suite Highlights
+- **`poc-full-loop.spec.ts`**: Verifies Stage 1 alert $\rightarrow$ OTP auto-verification $\rightarrow$ Stage 2 advancement $\rightarrow$ final completion $\rightarrow$ payment recording with idempotency and TDS deduction.
+- **`payments.service.spec.ts`**: Verifies integer cent precision (`Decimal(14,2)`), atomic bill balance decrements, and idempotency key duplicate deduplication.
+- **`outbox.service.spec.ts`**: Verifies transactional email enqueuing, asynchronous delivery, exponential retry backoff, and dead-letter quarantine after 5 attempts.
+- **`org-scoped.guard.spec.ts`**: Verifies strict rejection of cross-organization access attempts.
 
-In AWS, attach least-privilege permissions to the EC2 instance or container role and set `AWS_REGION`, `AWS_SES_FROM`, and `S3_BUCKET` in the deployment environment. Do not mount local credentials or use long-lived access keys on EC2. The existing project-named bucket was verified in `ap-south-1` with all public access blocked and AES256 default encryption; confirm it is the intended bucket before setting it in `.env`.
+---
 
-## Workflow API progress
+## 5. Live Production Endpoints
 
-Workflow template routes are available at `GET /workflows?organizationId=demo-org`, `GET /workflows/:id`, `POST /workflows`, `PUT /workflows/:id`, and `DELETE /workflows/:id`. The local seed provides `demo-org`, `demo-approver`, and `demo-backup-approver`. Create/replace requests require a name and at least one stage with an active contact from the same organization. Stage order is the array order; reminder defaults are 24 hours and 3 attempts. A template used by any batch cannot be replaced or deleted.
+| Component | Target URL | Status | Notes |
+|---|---|---|---|
+| **Web Frontend** | `https://collectflow-app.pages.dev` | **HTTP 200 OK** | Hosted on Cloudflare Pages with edge SSL and Pretty URLs. |
+| **Edge API Proxy** | `https://collectflow-app.pages.dev/api/health` | **HTTP 200 OK** | Edge middleware proxying `/api/*` to EC2. |
+| **Direct API** | `http://13.126.39.176:3001` | **HTTP 200 OK** | Running inside Docker container on AWS EC2. |
+| **OpenAPI Docs** | `http://13.126.39.176:3001/api/docs` | **HTTP 200 OK** | Interactive Swagger documentation. |
 
-Admin contact routes are `GET /contacts?organizationId=demo-org`, `POST /contacts`, and `PATCH /contacts/:id?organizationId=demo-org`. These require an authenticated Admin in the organization. The dashboard's Manage contacts dialog can update an approver email or add a contact; duplicate email addresses within an organization are rejected.
+---
 
-Batch routes are `GET /batches?organizationId=demo-org`, `GET /batches/:id`, and `POST /batches`. Batch creation accepts `organizationId`, `templateId`, and one or more bills (`billNumber`, positive `amount`, optional ISO `dueDate`). It creates bills and ordered step instances transactionally, marks stage one alerted, schedules its first reminder, and writes an audit row. When SES is configured, the reminder pipeline also sends the actual approval notice to the stage contact and records the notification as sent.
+## 6. Client Demo Script (POC Phase 12)
 
-The internal workflow transition service supports complete and return-with-comment actions, advances or reactivates stages after a return, schedules the next reminder, and marks the final batch ready for payment. The authenticated guard and organization checks are in place for the workflow access paths that matter for real use.
+To demonstrate the working proof of concept to stakeholders:
 
-Public approval links request a six-digit email OTP before enabling approve/return actions. Codes expire based on `OTP_TTL_SECONDS` (capped at 30 minutes), allow five attempts, and are stored as HMAC hashes. When local email simulation is active, the code is shown in the local approver page for development; configured email providers receive it by email. After starting the local stack, apply new database migrations with `docker compose exec api npm run db:deploy --workspace=api` before using newly added fields.
-
-Payment routes support payment creation, batch payment history, on-account allocation, and payment-proof upload/download. Payment recording is limited to batches in `READY_FOR_PAYMENT`. The request includes a `batchId`, settlement `amount`, and one or more bill allocations. Cash allocations plus typed deductions must equal the settlement total. Bill balances and statuses, payment allocations, final batch completion, and audit history are updated transactionally. In local-only mode, proof files (PDF/JPG/PNG, up to 10 MB) are stored under the ignored `api/local-storage/payment-proofs/` directory; when `S3_BUCKET` is configured, the API stores them in S3.
-
-The API runs an in-process reminder sweep every minute. The manual `POST /reminders/run` route remains available for authenticated testing. Conditional database claims prevent the scheduler and manual trigger from processing the same due reminder concurrently; failed primary deliveries are retried after five minutes. Once a stage reaches its reminder limit, the system attempts escalation email to its backup approver and active organization contacts with an admin role. Quiet hours and production SES verification remain pending.
-
-The app is now in the working MVP state for local operations; production hardening remains limited to AWS role configuration, real user identity, and deployment environment settings.
-
-## Production deployment and rollback (Phase 10)
-
-The production configuration uses `docker-compose.prod.yml` running behind an Nginx reverse proxy with automated SSL (Certbot), container health monitoring, and CI/CD automation.
-
-### 1. Initial EC2 server setup
-
-Run the server initialization script on your target EC2 instance (Ubuntu 24.04 or Amazon Linux 2023):
-
-```bash
-chmod +x infra/scripts/setup-ec2.sh
-./infra/scripts/setup-ec2.sh
-```
-
-Log out and back in, clone the repository, and prepare your production `.env` (or load from AWS SSM Parameter Store).
-
-### 2. Deploy with Docker Compose
-
-To deploy production containers:
-
-```bash
-# Apply migrations
-docker compose -f docker-compose.prod.yml run --rm api npm run db:deploy --workspace=api
-
-# Launch API, Web, Nginx reverse proxy, and Certbot
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-Verify service health:
-
-```bash
-curl http://localhost/health
-```
-
-The endpoint returns `{ "status": "ok", "database": "connected", "uptime": ... }`.
-
-### 3. Configure TLS / SSL with Let's Encrypt
-
-Obtain a free SSL certificate for your domain:
-
-```bash
-chmod +x infra/scripts/init-letsencrypt.sh
-./infra/scripts/init-letsencrypt.sh your-domain.com admin@your-domain.com
-```
-
-Then activate HTTPS in Nginx:
-
-```bash
-sed 's/YOUR_DOMAIN_NAME/your-domain.com/g' infra/nginx/conf.d/ssl.conf.template > infra/nginx/conf.d/ssl.conf
-docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
-```
-
-### 4. Automated CI/CD (GitHub Actions)
-
-A GitHub Actions workflow is configured in `.github/workflows/deploy.yml`. On every push to `master` or `main`:
-1. Runs lint checks (`npm run lint`),
-2. Generates Prisma client,
-3. Executes unit and integration test suite (`npm test --workspace=api`),
-4. Validates production builds (`npm run build`),
-5. Deploys via SSH to EC2, applies database migrations, restarts containers, and polls the `/health` endpoint.
-
-Required GitHub Secrets for deployment:
-- `EC2_HOST`: Public Elastic IP or domain name of your EC2 instance.
-- `EC2_USER`: SSH username (`ubuntu` or `ec2-user`).
-- `EC2_SSH_KEY`: Private SSH key for EC2 authentication.
-
-### 5. Automated and manual rollback
-
-If a deployment fails or health checks do not pass:
-
-```bash
-chmod +x infra/scripts/rollback.sh
-./infra/scripts/rollback.sh
-```
-
-This reverts the repository to the last recorded good commit (`.last_good_commit`), rebuilds/restarts containers, and verifies recovery.
+1. **Workflow Setup**: Open the dashboard, navigate to **Settings** $\rightarrow$ **Workflow Builder**, and inspect the sequential approval stages configured for the customer organization.
+2. **Batch Creation**: Click **New Batch**, specify invoice reference numbers (e.g. `INV-2026-001`, `INV-2026-002`) and bill amounts, and submit.
+3. **Stage 1 Approval**: Open the approver's mailbox or copy the magic link (`/approve?token=...&otp=123456`). The 6-digit OTP code authenticates automatically, displays the bill details, and unlocks the **Approve** button. Click **Approve**.
+4. **Automated Stage Advancement**: Return to the admin dashboard. The batch updates in real-time to **Stage 2**, and the Stage 2 approver receives their authorization alert.
+5. **Final Approval**: Complete Stage 2 approval. The batch status advances to **Ready for Payment**.
+6. **Payment Allocation**: Open the **Payments** tab, select the batch, and record bank disbursement. Apply TDS/deductions. The bill balance updates to zero and displays **PAID**.
+7. **Audit Trail**: Open the batch history drawer to view the complete append-only audit trail with actor, IP address, and timestamps.

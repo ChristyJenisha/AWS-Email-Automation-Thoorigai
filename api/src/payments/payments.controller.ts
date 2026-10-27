@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Header,
+  Headers,
   Param,
   PayloadTooLargeException,
   Post,
@@ -16,6 +17,7 @@ import {
 
 import { AuthGuard } from '../auth/auth.guard.js';
 import { AuthService } from '../auth/auth.service.js';
+import type { AuthedRequest } from '../auth/authed-request.interface.js';
 
 import {
   AllocateOnAccountPaymentDto,
@@ -43,70 +45,54 @@ export class PaymentsController {
 
   @Get('batch/:batchId')
   async listByBatch(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('batchId') batchId: string,
   ) {
-    const batch =
-      await this.paymentsService.getBatch(batchId);
+    const batch = await this.paymentsService.getBatch(batchId);
 
-    this.authService.assertOrganizationAccess(
-      request?.user,
-      batch.organizationId,
-    );
+    this.authService.assertOrganizationAccess(request?.user, batch.organizationId);
 
-    return this.paymentsService.listByBatch(
-      batchId,
-    );
+    return this.paymentsService.listByBatch(batchId);
   }
 
   @Post()
   async create(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Body() input: CreatePaymentDto,
+    @Headers('idempotency-key') idempotencyKeyHeader?: string,
   ) {
-    const batch =
-      await this.paymentsService.getBatch(
-        input.batchId,
-      );
+    this.authService.assertAdminAccess(request?.user);
+    const batch = await this.paymentsService.getBatch(input.batchId);
 
-    this.authService.assertOrganizationAccess(
-      request?.user,
-      batch.organizationId,
-    );
+    this.authService.assertOrganizationAccess(request?.user, batch.organizationId);
 
-    return this.paymentsService.create(
-      input,
-      request.user.id,
-    );
+    const idempotencyKey = input.idempotencyKey || idempotencyKeyHeader || request?.headers?.['idempotency-key'];
+    if (idempotencyKey) {
+      input.idempotencyKey = String(idempotencyKey).trim();
+    }
+    return this.paymentsService.create(input, request.user.id);
   }
 
   @Post(':paymentId/proof-upload-url')
   async createProofUploadUrl(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('paymentId') paymentId: string,
     @Body() input: CreatePaymentProofUploadUrlDto,
   ) {
-    const payment =
-      await this.paymentsService.getPayment(
-        paymentId,
-      );
+    this.authService.assertAdminAccess(request?.user);
+    const payment = await this.paymentsService.getPayment(paymentId);
 
-    this.authService.assertOrganizationAccess(
-      request?.user,
-      payment.batch.organizationId,
-    );
+    this.authService.assertOrganizationAccess(request?.user, payment.batch.organizationId);
 
-    return this.paymentsService.createProofUploadUrl(
-      paymentId,
-      input.contentType,
-    );
+    return this.paymentsService.createProofUploadUrl(paymentId, input.contentType);
   }
 
   @Put(':paymentId/proof-file')
   async uploadProofFile(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('paymentId') paymentId: string,
   ) {
+    this.authService.assertAdminAccess(request?.user);
     const payment = await this.paymentsService.getPayment(paymentId);
     this.authService.assertOrganizationAccess(request?.user, payment.batch.organizationId);
 
@@ -129,15 +115,13 @@ export class PaymentsController {
 
   @Get(':paymentId/proof-download-url')
   async createProofDownloadUrl(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('paymentId') paymentId: string,
   ) {
+    this.authService.assertAdminAccess(request?.user);
     const payment = await this.paymentsService.getPayment(paymentId);
 
-    this.authService.assertOrganizationAccess(
-      request?.user,
-      payment.batch.organizationId,
-    );
+    this.authService.assertOrganizationAccess(request?.user, payment.batch.organizationId);
 
     return this.paymentsService.createProofDownloadUrl(paymentId);
   }
@@ -145,9 +129,10 @@ export class PaymentsController {
   @Get(':paymentId/proof-file')
   @Header('Cache-Control', 'private, no-store')
   async getLocalProofFile(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('paymentId') paymentId: string,
   ) {
+    this.authService.assertAdminAccess(request?.user);
     const payment = await this.paymentsService.getPayment(paymentId);
     this.authService.assertOrganizationAccess(request?.user, payment.batch.organizationId);
     const proof = await this.paymentsService.getLocalProofFile(paymentId);
@@ -159,40 +144,29 @@ export class PaymentsController {
 
   @Post(':paymentId/proof')
   async confirmProofUpload(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('paymentId') paymentId: string,
     @Body() input: ConfirmPaymentProofDto,
   ) {
+    this.authService.assertAdminAccess(request?.user);
     const payment = await this.paymentsService.getPayment(paymentId);
 
-    this.authService.assertOrganizationAccess(
-      request?.user,
-      payment.batch.organizationId,
-    );
+    this.authService.assertOrganizationAccess(request?.user, payment.batch.organizationId);
 
     return this.paymentsService.confirmProofUpload(paymentId, input.key);
   }
 
   @Post(':paymentId/allocations')
   async allocateOnAccount(
-    @Req() request: any,
+    @Req() request: AuthedRequest,
     @Param('paymentId') paymentId: string,
     @Body() input: AllocateOnAccountPaymentDto,
   ) {
-    const payment =
-      await this.paymentsService.getPayment(
-        paymentId,
-      );
+    this.authService.assertAdminAccess(request?.user);
+    const payment = await this.paymentsService.getPayment(paymentId);
 
-    this.authService.assertOrganizationAccess(
-      request?.user,
-      payment.batch.organizationId,
-    );
+    this.authService.assertOrganizationAccess(request?.user, payment.batch.organizationId);
 
-    return this.paymentsService.allocateOnAccount(
-      paymentId,
-      input.allocations,
-      request.user.id,
-    );
+    return this.paymentsService.allocateOnAccount(paymentId, input.allocations, request.user.id);
   }
 }

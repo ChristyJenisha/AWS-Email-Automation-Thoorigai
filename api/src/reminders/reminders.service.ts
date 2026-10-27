@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { NotificationStatus, StepStatus } from '@prisma/client';
-import { EmailService } from '../email/email.service.js';
+import { NotificationStatus, Role, StepStatus } from '@prisma/client';
+import { EmailService, buildApprovalEmailHtml } from '../email/email.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WorkflowTransitionsService } from '../workflows/workflow-transitions.service.js';
 
@@ -20,23 +20,39 @@ export class RemindersService {
       include: {
         stage: {
           include: {
-            contact: { select: { id: true, email: true } },
-            backupContact: { select: { id: true, email: true } },
+            contact: { select: { id: true, email: true, name: true, isActive: true } },
+            backupContact: { select: { id: true, email: true, name: true, isActive: true } },
           },
         },
-        batch: { select: { organizationId: true } },
+        batch: {
+          select: {
+            id: true,
+            organizationId: true,
+            template: { select: { id: true, name: true } },
+            bills: { select: { billNumber: true }, orderBy: { createdAt: 'asc' } },
+          },
+        },
       },
     });
 
     if (!step) return { status: 'skipped' as const, reason: 'no_active_step' };
-    const contactActive = (step.stage.contact as any)?.isActive !== false;
-    const backupActive = (step.stage.backupContact as any)?.isActive !== false;
+    const contactActive = step.stage.contact?.isActive !== false;
+    const backupActive = step.stage.backupContact?.isActive !== false;
     const approver = (contactActive && step.stage.contact?.email)
       ? step.stage.contact
       : (backupActive && step.stage.backupContact?.email)
         ? step.stage.backupContact
         : null;
     if (!approver?.email || !approver.id) return { status: 'skipped' as const, reason: 'no_approver_email' };
+
+    const batchBills = (step.batch as any)?.bills;
+    const rawBatchId = (step.batch as any)?.id || step.batchId || '';
+    const batchName =
+      batchBills?.length === 1 && batchBills[0]?.billNumber
+        ? batchBills[0].billNumber
+        : batchBills && batchBills.length > 1
+          ? batchBills.map((b: any) => b.billNumber).join(', ')
+          : ((step.batch as any)?.template?.name || (rawBatchId.length > 8 ? `B-${rawBatchId.slice(-6).toUpperCase()}` : (rawBatchId || 'Batch')));
 
     const notification = await this.prisma.notification.create({
       data: {
@@ -48,14 +64,90 @@ export class RemindersService {
     });
 
     try {
+      let initialOtpCode: string | undefined;
+      if (typeof this.workflowTransitions.issueApprovalOtp === 'function') {
+        try {
+          const otpResult = await this.workflowTransitions.issueApprovalOtp(step.id, 30);
+          initialOtpCode = otpResult?.code;
+        } catch (otpErr) {
+          console.warn('[INITIAL_OTP_ISSUE_WARN]', otpErr);
+        }
+      }
+
       const token = this.workflowTransitions.generateApprovalToken(step.id, approver.id, step.batch.organizationId);
       const approvalUrl = new URL('/approve', process.env.APPROVAL_APP_URL ?? 'http://localhost:3000');
-      approvalUrl.searchParams.set('token', token); console.log('[APPROVAL_URL_DEBUG] hasToken=', approvalUrl.searchParams.has('token'), 'url=', approvalUrl.origin + approvalUrl.pathname + '?token-present');
+      approvalUrl.searchParams.set('token', token);
+      if (initialOtpCode) {
+        approvalUrl.searchParams.set('code', initialOtpCode);
+      }
+      console.log('[APPROVAL_URL_DEBUG] hasToken=', approvalUrl.searchParams.has('token'), 'url=', approvalUrl.origin + approvalUrl.pathname + '?token-present');
+
+      const html = buildApprovalEmailHtml({
+        headline: 'Stage 1 Review Request',
+        recipientName: approver.name,
+        leadMessage: 'A new bill collection batch has been initialized and is ready for your Stage 1 verification.',
+        batchId: step.batchId,
+        batchName: batchName,
+        batchLabel: 'Batch Name:',
+        stageOrder: 1,
+        ctaUrl: approvalUrl.toString(),
+        ctaText: 'Review & Approve Batch',
+        subNotice: 'Click above to securely review and approve this batch.',
+      });
+
       await this.emailService.sendReminderEmail({
         to: approver.email,
-        subject: `Approval required for batch ${step.batchId}`,
-        body: `A bill collection batch is ready for your review. Approve or return it here: ${approvalUrl.toString()}`,
+        subject: `Approval required for batch ${batchName}`,
+        body: `Hello ${approver.name},\n\nA new bill collection batch has been initialized and is ready for your Stage 1 verification.\n\nBatch Name: ${batchName}\nWorkflow Stage: Stage 1\n\nReview & Approve Batch: ${approvalUrl.toString()}\n\nClick above to securely review and approve this batch.`,
+        html,
       });
+      
+      // Also notify backup approver if present so either approver can review & authorize
+      if (
+        step.stage.backupContact?.email &&
+        step.stage.backupContact.id &&
+        step.stage.backupContact.email !== approver.email
+      ) {
+        try {
+          const backupToken = this.workflowTransitions.generateApprovalToken(
+            step.id,
+            step.stage.backupContact.id,
+            step.batch.organizationId,
+          );
+          const backupApprovalUrl = new URL(
+            '/approve',
+            process.env.APPROVAL_APP_URL ?? 'http://localhost:3000',
+          );
+          backupApprovalUrl.searchParams.set('token', backupToken);
+          if (initialOtpCode) {
+            backupApprovalUrl.searchParams.set('code', initialOtpCode);
+          }
+
+          const backupHtml = buildApprovalEmailHtml({
+            headline: 'Action Required (Backup Approver): Stage 1 Workflow Approval',
+            recipientName: step.stage.backupContact.name,
+            leadMessage:
+              'A new bill collection batch has been initialized. As assigned backup approver, you can also review and authorize this batch.',
+            batchId: step.batchId,
+            batchName: batchName,
+            batchLabel: 'Batch Name:',
+            stageOrder: 1,
+            ctaUrl: backupApprovalUrl.toString(),
+            ctaText: 'Review & Approve Batch',
+            subNotice: 'Click above to securely review and approve this batch.',
+          });
+
+          await this.emailService.sendReminderEmail({
+            to: step.stage.backupContact.email,
+            subject: `Approval required (Backup Approver) for batch ${batchName}`,
+            body: `Hello ${step.stage.backupContact.name},\n\nA new bill collection batch has been initialized. As assigned backup approver, you can also review and authorize this batch.\n\nBatch Name: ${batchName}\nWorkflow Stage: Stage 1\n\nReview & Approve Batch: ${backupApprovalUrl.toString()}\n\nClick above to securely review and approve this batch.`,
+            html: backupHtml,
+          });
+        } catch (backupErr) {
+          console.warn('[BACKUP_APPROVER_EMAIL_WARN]', backupErr);
+        }
+      }
+
       await this.prisma.notification.update({
         where: { id: notification.id },
         data: { status: NotificationStatus.SENT, sentAt: new Date() },
@@ -103,12 +195,13 @@ export class RemindersService {
       where: {
         status: StepStatus.ALERTED,
         nextReminderAt: { lte: now },
+        batch: { deletedAt: null },
       },
       include: {
         stage: {
           include: {
-            contact: { select: { id: true, email: true } },
-            backupContact: { select: { id: true, email: true } },
+            contact: { select: { id: true, email: true, isActive: true } },
+            backupContact: { select: { id: true, email: true, isActive: true } },
           },
         },
         batch: {
@@ -117,7 +210,7 @@ export class RemindersService {
             organization: {
               select: {
                 contacts: {
-                  where: { isActive: true, role: { contains: 'admin', mode: 'insensitive' } },
+                  where: { isActive: true, role: Role.ADMIN },
                   select: { id: true, email: true },
                 },
               },
@@ -136,8 +229,8 @@ export class RemindersService {
     }> = [];
 
     for (const step of dueSteps) {
-      const contactActive = (step.stage.contact as any)?.isActive !== false;
-      const backupActive = (step.stage.backupContact as any)?.isActive !== false;
+      const contactActive = step.stage.contact?.isActive !== false;
+      const backupActive = step.stage.backupContact?.isActive !== false;
       const approver = (contactActive && step.stage.contact?.email)
         ? step.stage.contact
         : (backupActive && step.stage.backupContact?.email)
@@ -245,10 +338,13 @@ export class RemindersService {
     return results;
   }
 
-  private createApprovalUrl(stepInstanceId: string, actorId: string, organizationId: string): string {
+  private createApprovalUrl(stepInstanceId: string, actorId: string, organizationId: string, otpCode?: string): string {
     const token = this.workflowTransitions.generateApprovalToken(stepInstanceId, actorId, organizationId);
     const approvalUrl = new URL('/approve', process.env.APPROVAL_APP_URL ?? 'http://localhost:3000');
-    approvalUrl.searchParams.set('token', token); console.log('[APPROVAL_URL_DEBUG] hasToken=', approvalUrl.searchParams.has('token'), 'url=', approvalUrl.origin + approvalUrl.pathname + '?token-present');
+    approvalUrl.searchParams.set('token', token);
+    if (otpCode) {
+      approvalUrl.searchParams.set('code', otpCode);
+    }
     return approvalUrl.toString();
   }
 
